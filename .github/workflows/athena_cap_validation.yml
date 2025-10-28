@@ -1,10 +1,5 @@
 name: Athena CAP Validation & Ledger Commit
 
-      - name: Debug Schema Header
-        run: |
-          head -n 10 $SCHEMA_PATH
-
-
 on:
   workflow_dispatch:
   repository_dispatch:
@@ -26,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          clean: true
 
       - name: Prepare CAP_LOGS directory
         run: mkdir -p $LEDGER_PATH
@@ -34,6 +31,12 @@ jobs:
         run: |
           echo "${{ toJson(github.event.client_payload) }}" > cap_payload.json
           cat cap_payload.json
+
+      # 🧩 Debug step: print first lines of the schema file seen by the runner
+      - name: Debug Schema Header
+        run: |
+          echo "=== Printing first 10 lines of schema file ($SCHEMA_PATH) ==="
+          head -n 10 $SCHEMA_PATH
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
