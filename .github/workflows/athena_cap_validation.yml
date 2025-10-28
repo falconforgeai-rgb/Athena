@@ -1,0 +1,104 @@
+name: Athena CAP Validation & Ledger Commit
+on:
+  repository_dispatch:
+    types: [cap_validation, hic_validation, humanization_pass, whitepaper_release]
+
+permissions:
+  contents: write
+
+env:
+  SCHEMA_PATH: "./schemas/ATHENA_CAP_SCHEMA_v3_4.json"
+  LEDGER_PATH: "./CAP_LOGS"
+  SCHEMA_VERSION: "v3.4"
+
+jobs:
+  validate_and_commit:
+    name: Validate CAP Payload and Commit to Ledger
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Create working directory for ledger logs
+      - name: Ensure CAP_LOGS directory exists
+        run: mkdir -p $LEDGER_PATH
+
+      # 3️⃣ Write incoming payload to file
+      - name: Write CAP payload to temp file
+        run: |
+          echo "${{ toJson(github.event.client_payload) }}" > cap_payload.json
+          cat cap_payload.json
+
+      # 4️⃣ Install Node.js (for JSON schema validation)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # 5️⃣ Install AJV for schema validation
+      - name: Install AJV validator
+        run: npm install -g ajv-cli@5.0.0
+
+      # 6️⃣ Validate CAP JSON against schema
+      - name: Validate CAP JSON
+        id: schema_check
+        run: |
+          ajv validate -s $SCHEMA_PATH -d cap_payload.json --strict=true
+        continue-on-error: false
+
+      # 7️⃣ Generate filename and hash
+      - name: Generate CAP filename and hash
+        id: hash_gen
+        run: |
+          TIMESTAMP=$(jq -r '.timestamp' cap_payload.json | tr -d '":')
+          CAP_ID=$(jq -r '.cap_id' cap_payload.json)
+          DOMAIN=$(jq -r '.domain' cap_payload.json | tr '[:upper:]' '[:lower:]')
+          YEAR=$(date -u +"%Y")
+          MONTH=$(date -u +"%m")
+          FILEPATH="$LEDGER_PATH/$YEAR/$MONTH/${DOMAIN}_${CAP_ID}.json"
+          mkdir -p $(dirname "$FILEPATH")
+          SHA256=$(sha256sum cap_payload.json | awk '{print $1}')
+          echo "file=$FILEPATH" >> $GITHUB_OUTPUT
+          echo "hash=$SHA256" >> $GITHUB_OUTPUT
+          echo "Generated hash: $SHA256"
+
+      # 8️⃣ Embed governance_chain.hash_prev for continuity
+      - name: Link previous CAP hash
+        run: |
+          PREV_HASH=$(grep -m1 -h 'SHA256:' $(find $LEDGER_PATH -type f | sort | tail -n 1) 2>/dev/null || echo "SHA256:NULL")
+          jq --arg prev "SHA256:${{ steps.hash_gen.outputs.hash }}" '.governance_chain.hash_prev = $prev' cap_payload.json > cap_final.json
+          mv cap_final.json cap_payload.json
+
+      # 9️⃣ Commit CAP record to ledger
+      - name: Commit CAP record
+        run: |
+          FILE=${{ steps.hash_gen.outputs.file }}
+          mkdir -p $(dirname "$FILE")
+          cp cap_payload.json "$FILE"
+          git config user.name "Athena-Audit-Bot"
+          git config user.email "audit-bot@falconforge.ai"
+          git add "$FILE"
+          git commit -m "Add CAP record: ${{ github.event.client_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}]"
+          git push
+
+      # 🔟 Optional: Notify Zapier/Notion
+      - name: Send summary to Zapier or Notion
+        if: ${{ always() }}
+        env:
+          ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
+        run: |
+          SUMMARY=$(jq -r '.reasoning_summary' cap_payload.json)
+          DOMAIN=$(jq -r '.domain' cap_payload.json)
+          STATUS=$(jq -r '.status' cap_payload.json)
+          curl -X POST "$ZAPIER_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"cap_id\": \"${{ github.event.client_payload.cap_id }}\", \"domain\": \"$DOMAIN\", \"status\": \"$STATUS\", \"summary\": \"$SUMMARY\", \"schema_version\": \"$SCHEMA_VERSION\" }"
+
+      # ✅ Verification Summary
+      - name: Output validation summary
+        run: |
+          echo "CAP Record committed successfully."
+          echo "Schema Version: $SCHEMA_VERSION"
+          echo "Record Hash: ${{ steps.hash_gen.outputs.hash }}"
