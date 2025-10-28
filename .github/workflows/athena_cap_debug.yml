@@ -1,41 +1,12 @@
-name: Athena CAP Debug Validation
+name: Athena CAP Debug Validation (Base64 Safe)
 
 on:
   workflow_dispatch:
     inputs:
-      cap_payload:
-        description: "CAP JSON payload (paste as plain JSON here)"
+      cap_payload_b64:
+        description: "Base64-encoded CAP JSON payload"
         required: true
-        default: |
-          {
-            "cap_id": "debug-001",
-            "timestamp": "2025-10-29T04:00:00Z",
-            "domain": "Governance",
-            "context_mode": "Advisor",
-            "ems": "stable",
-            "cw": 0.71,
-            "ad": 0.84,
-            "hci": 0.77,
-            "hs": 0.88,
-            "haa": 0.91,
-            "er_delta": 0.03,
-            "validator_ethics": "compliant",
-            "validator_empathy": "aligned",
-            "validator_signatures": [
-              {
-                "validator": "athena-core",
-                "signature": "sha256-test-signature",
-                "timestamp": "2025-10-29T04:00:00Z"
-              }
-            ],
-            "reasoning_summary": "CAP schema validation debug payload.",
-            "laurie_version": "v3.4",
-            "governance_chain": {
-              "hash_prev": "NULL",
-              "hash_next": null
-            },
-            "status": "pending"
-          }
+        default: ""
 
 permissions:
   contents: read
@@ -45,37 +16,25 @@ env:
 
 jobs:
   debug_validation:
-    name: Debug CAP Input Normalization and Validation
+    name: Debug CAP Input Decoding and Validation
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Debug raw input capture
+      - name: Decode base64 CAP payload
         run: |
-          echo "=== RAW INPUT CAP PAYLOAD ==="
-          echo "${{ github.event.inputs.cap_payload }}"
-          echo "============================="
-
-      - name: Write raw input to file
-        run: |
-          echo "${{ github.event.inputs.cap_payload }}" > raw_payload.txt
-          echo "=== WROTE raw_payload.txt ==="
-          ls -lh raw_payload.txt
+          echo "${{ github.event.inputs.cap_payload_b64 }}" | base64 --decode > cap_payload.json
+          echo "✅ Decoded cap_payload.json"
+          cat cap_payload.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Normalize CAP payload
-        run: |
-          node normalize.js || true
-          echo "--- Normalized cap_payload.json ---"
-          cat cap_payload.json || echo "❌ cap_payload.json missing!"
-
-      - name: Validate with AJV
+      - name: Validate CAP JSON (Node/AJV 2020)
         run: |
           cat <<'EOF' > validate.js
           const fs = require('fs');
