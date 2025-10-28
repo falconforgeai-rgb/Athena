@@ -21,7 +21,6 @@ on:
   repository_dispatch:
     types: [cap_validation, hic_validation, humanization_pass, whitepaper_release]
 
-
 permissions:
   contents: write
 
@@ -44,15 +43,14 @@ jobs:
       - name: Prepare CAP_LOGS directory
         run: mkdir -p $LEDGER_PATH
 
-     - name: Write CAP payload to file
+      - name: Write CAP payload to file
         run: |
           if [ -n "${{ github.event.inputs.cap_payload }}" ]; then
             echo "${{ github.event.inputs.cap_payload }}" > cap_payload.json
           else
-           echo "${{ toJson(github.event.client_payload) }}" > cap_payload.json
+            echo "${{ toJson(github.event.client_payload) }}" > cap_payload.json
           fi
           cat cap_payload.json
-
 
       - name: Debug Schema Header
         run: |
