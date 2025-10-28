@@ -43,13 +43,29 @@ jobs:
         run: npm install -g ajv-cli@5.0.0
 
       # 6️⃣ Validate CAP JSON against schema
-      - name: Validate CAP JSON
-        id: schema_check
-        run: |
-          curl -s https://json-schema.org/draft/2020-12/schema -o metaschema.json
-          ajv add-metaschema metaschema.json
-          ajv validate -s $SCHEMA_PATH -d cap_payload.json --spec=draft2020 --strict=false
-        continue-on-error: false
+- name: Validate CAP JSON (Node/AJV 2020)
+  id: schema_check
+  run: |
+    echo "const fs = require('fs'); 
+    const Ajv2020 = require('ajv/dist/2020');
+    const addFormats = require('ajv-formats');
+    const schema = JSON.parse(fs.readFileSync(process.env.SCHEMA_PATH));
+    const data = JSON.parse(fs.readFileSync('cap_payload.json'));
+    const ajv = new Ajv2020({ strict: false, allErrors: true });
+    addFormats(ajv);
+    const validate = ajv.compile(schema);
+    const valid = validate(data);
+    if (!valid) { 
+      console.error('❌ Validation errors:', validate.errors); 
+      process.exit(1); 
+    } else { 
+      console.log('✅ CAP JSON validated successfully.'); 
+    }" > validate.js
+
+    npm install ajv@8 ajv-formats@2
+    node validate.js
+  continue-on-error: false
+
 
       # 7️⃣ Generate filename and hash
       - name: Generate CAP filename and hash
