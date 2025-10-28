@@ -46,6 +46,8 @@ jobs:
       - name: Validate CAP JSON
         id: schema_check
         run: |
+          curl -s https://json-schema.org/draft/2020-12/schema -o metaschema.json
+          ajv add-metaschema metaschema.json
           ajv validate -s $SCHEMA_PATH -d cap_payload.json --spec=draft2020 --strict=false
         continue-on-error: false
 
