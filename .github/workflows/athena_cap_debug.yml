@@ -1,0 +1,98 @@
+name: Athena CAP Debug Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      cap_payload:
+        description: "CAP JSON payload (paste as plain JSON here)"
+        required: true
+        default: |
+          {
+            "cap_id": "debug-001",
+            "timestamp": "2025-10-29T04:00:00Z",
+            "domain": "Governance",
+            "context_mode": "Advisor",
+            "ems": "stable",
+            "cw": 0.71,
+            "ad": 0.84,
+            "hci": 0.77,
+            "hs": 0.88,
+            "haa": 0.91,
+            "er_delta": 0.03,
+            "validator_ethics": "compliant",
+            "validator_empathy": "aligned",
+            "validator_signatures": [
+              {
+                "validator": "athena-core",
+                "signature": "sha256-test-signature",
+                "timestamp": "2025-10-29T04:00:00Z"
+              }
+            ],
+            "reasoning_summary": "CAP schema validation debug payload.",
+            "laurie_version": "v3.4",
+            "governance_chain": {
+              "hash_prev": "NULL",
+              "hash_next": null
+            },
+            "status": "pending"
+          }
+
+permissions:
+  contents: read
+
+env:
+  SCHEMA_PATH: "./schemas/ATHENA_CAP_SCHEMA_v3_4.json"
+
+jobs:
+  debug_validation:
+    name: Debug CAP Input Normalization and Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Debug raw input capture
+        run: |
+          echo "=== RAW INPUT CAP PAYLOAD ==="
+          echo "${{ github.event.inputs.cap_payload }}"
+          echo "============================="
+
+      - name: Write raw input to file
+        run: |
+          echo "${{ github.event.inputs.cap_payload }}" > raw_payload.txt
+          echo "=== WROTE raw_payload.txt ==="
+          ls -lh raw_payload.txt
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Normalize CAP payload
+        run: |
+          node normalize.js || true
+          echo "--- Normalized cap_payload.json ---"
+          cat cap_payload.json || echo "❌ cap_payload.json missing!"
+
+      - name: Validate with AJV
+        run: |
+          cat <<'EOF' > validate.js
+          const fs = require('fs');
+          const Ajv2020 = require('ajv/dist/2020');
+          const addFormats = require('ajv-formats');
+          const schema = JSON.parse(fs.readFileSync(process.env.SCHEMA_PATH));
+          const data = JSON.parse(fs.readFileSync('cap_payload.json'));
+          const ajv = new Ajv2020({ strict: false, allErrors: true });
+          addFormats(ajv);
+          const validate = ajv.compile(schema);
+          const valid = validate(data);
+          if (!valid) {
+            console.error('❌ Validation errors:', validate.errors);
+            process.exit(1);
+          } else {
+            console.log('✅ CAP JSON validated successfully.');
+          }
+          EOF
+          npm install ajv@8 ajv-formats@2
+          node validate.js
