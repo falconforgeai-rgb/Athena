@@ -43,7 +43,7 @@ jobs:
       - name: Prepare CAP_LOGS directory
         run: mkdir -p $LEDGER_PATH
 
-            - name: Write CAP payload to file
+      - name: Write CAP payload to file
         run: |
           if [ -n "${{ github.event.inputs.cap_payload }}" ]; then
             echo "${{ github.event.inputs.cap_payload }}" | jq '.' > cap_payload.json
@@ -119,7 +119,7 @@ jobs:
           git commit -m "Add CAP record: ${{ github.event.client_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}]"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
 
-      - name: Send summary to Zapier or Notion
+      - name: Send summary to Zapier (Notion Bridge)
         if: ${{ always() }}
         env:
           ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
@@ -127,12 +127,31 @@ jobs:
           SUMMARY=$(jq -r '.reasoning_summary' cap_payload.json)
           DOMAIN=$(jq -r '.domain' cap_payload.json)
           STATUS=$(jq -r '.status' cap_payload.json)
+          CAP_ID=$(jq -r '.cap_id' cap_payload.json)
+          HCI=$(jq -r '.hci' cap_payload.json)
+          HS=$(jq -r '.hs' cap_payload.json)
+          HAA=$(jq -r '.haa' cap_payload.json)
+          TIMESTAMP=$(jq -r '.timestamp' cap_payload.json)
+          HASH=${{ steps.hash_gen.outputs.hash }}
+
           if [ -n "$ZAPIER_WEBHOOK_URL" ]; then
+            echo "📡 Dispatching CAP event to Zapier → Notion..."
             curl -X POST "$ZAPIER_WEBHOOK_URL" \
               -H "Content-Type: application/json" \
-              -d "{\"cap_id\": \"${{ github.event.client_payload.cap_id }}\", \"domain\": \"$DOMAIN\", \"status\": \"$STATUS\", \"summary\": \"$SUMMARY\", \"schema_version\": \"$SCHEMA_VERSION\" }"
+              -d "{
+                \"cap_id\": \"$CAP_ID\",
+                \"domain\": \"$DOMAIN\",
+                \"status\": \"$STATUS\",
+                \"hci\": $HCI,
+                \"hs\": $HS,
+                \"haa\": $HAA,
+                \"schema_version\": \"$SCHEMA_VERSION\",
+                \"summary\": \"$SUMMARY\",
+                \"record_hash\": \"$HASH\",
+                \"timestamp\": \"$TIMESTAMP\"
+              }"
           else
-            echo "No Zapier webhook URL provided."
+            echo "⚠️ No Zapier webhook URL found. Skipping Notion sync."
           fi
 
       - name: Output validation summary
