@@ -1,1 +1,147 @@
-
+{
+"$schema": "[https://json-schema.org/draft/2020-12/schema](https://json-schema.org/draft/2020-12/schema)",
+"$id": "[https://falconforge.ai/schema/athena_cap_v3_4.json](https://falconforge.ai/schema/athena_cap_v3_4.json)",
+"title": "Athena Compassion + Humanization Audit Pass (CAP) Schema v3.4",
+"description": "Unified ethical, emotional, and humanization validation schema for all Athena reasoning and communication outputs.",
+"type": "object",
+"properties": {
+"cap_id": {
+"type": "string",
+"description": "Unique Compassion Audit Pass identifier (UUIDv7).",
+"pattern": "^[0-9a-fA-F-]{36}$"
+},
+"timestamp": {
+"type": "string",
+"format": "date-time",
+"description": "UTC ISO8601 timestamp of CAP creation."
+},
+"domain": {
+"type": "string",
+"description": "Operational domain (e.g., Governance, Sales, Aviation, Research)."
+},
+"context_mode": {
+"type": "string",
+"enum": ["Mythic", "Advisor", "Sales", "Command", "Reconnection"],
+"description": "Communication or reasoning tone mode as defined by Athena Canon v3.4."
+},
+"ems": {
+"type": "number",
+"minimum": 0.0,
+"maximum": 1.0,
+"description": "Ethical Marker Sensitivity value."
+},
+"cw": {
+"type": "number",
+"minimum": 0.0,
+"maximum": 0.25,
+"description": "Compassion Weight applied during reasoning."
+},
+"ad": {
+"type": "number",
+"minimum": 0.0,
+"maximum": 0.2,
+"description": "Assertiveness Dampening applied to tone."
+},
+"hci": {
+"type": "number",
+"minimum": 0.0,
+"maximum": 1.0,
+"description": "Humane Consequence Index derived from outcome analysis."
+},
+"hs": {
+"type": "number",
+"minimum": 0.0,
+"maximum": 1.0,
+"description": "Humanization Score — measures emotional coherence, readability, and moral tone."
+},
+"haa": {
+"type": "number",
+"minimum": 0.0,
+"maximum": 1.0,
+"description": "Heroic Arc Alignment — measures ethical leadership pattern adherence to Heroic Influence Cycle (HIC)."
+},
+"er_delta": {
+"type": "number",
+"minimum": 0.0,
+"maximum": 1.0,
+"description": "Empathic Resonance Delta — deviation between intended and perceived empathy."
+},
+"drift_metrics": {
+"type": "object",
+"properties": {
+"cw_delta": { "type": "number", "minimum": 0.0 },
+"ad_delta": { "type": "number", "minimum": 0.0 },
+"hci_delta": { "type": "number", "minimum": 0.0 },
+"ed_delta": { "type": "number", "minimum": 0.0, "description": "Empathy Drift Delta — difference between expected and perceived empathy output." }
+},
+"required": ["cw_delta", "ad_delta", "hci_delta", "ed_delta"],
+"description": "Comprehensive Compassion and Empathy Drift metrics recorded during CHAC validation."
+},
+"validator_ethics": {
+"type": "string",
+"description": "Identifier or signature of the Ethics Validator."
+},
+"validator_empathy": {
+"type": "string",
+"description": "Identifier or signature of the Empathy Validator."
+},
+"validator_signatures": {
+"type": "object",
+"properties": {
+"ethics_signature": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+"empathy_signature": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" }
+},
+"required": ["ethics_signature", "empathy_signature"],
+"description": "Dual SHA256 signatures verifying ethical and humanization validation."
+},
+"reasoning_summary": {
+"type": "string",
+"maxLength": 512,
+"description": "Concise description of the reasoning or ethical decision audited."
+},
+"ethical_flags": {
+"type": "array",
+"items": { "type": "string" },
+"description": "Array of ethical, emotional, or humanization indicators (e.g., bias-risk, empathy-drift, tone-balance)."
+},
+"laurie_version": {
+"type": "string",
+"description": "Version of the LAURIE Engine responsible for ethical modulation."
+},
+"governance_chain": {
+"type": "object",
+"properties": {
+"hash_prev": { "type": "string", "pattern": "^SHA256:[A-Fa-f0-9]{64}$" },
+"hash_next": { "type": "string", "pattern": "^SHA256:[A-Fa-f0-9]{64}$" }
+},
+"required": ["hash_prev"],
+"description": "Immutable cryptographic linkage to prior and subsequent CAP records."
+},
+"status": {
+"type": "string",
+"enum": ["pending", "validated", "sealed"],
+"description": "Current validation state of the CAP record."
+}
+},
+"required": [
+"cap_id",
+"timestamp",
+"domain",
+"context_mode",
+"ems",
+"cw",
+"ad",
+"hci",
+"hs",
+"haa",
+"er_delta",
+"validator_ethics",
+"validator_empathy",
+"validator_signatures",
+"reasoning_summary",
+"laurie_version",
+"governance_chain",
+"status"
+],
+"additionalProperties": false
+}
