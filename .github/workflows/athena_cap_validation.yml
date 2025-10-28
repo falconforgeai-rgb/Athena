@@ -4,20 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       cap_payload:
-        description: "CAP JSON payload (paste object here; quotes optional)"
+        description: "CAP JSON payload (paste your full JSON here)"
         required: true
         default: |
-          {
-            "cap_id": "test-001",
-            "timestamp": "2025-10-29T00:00:00Z",
-            "domain": "Governance",
-            "context_mode": "Advisor",
-            "hs": 0.88,
-            "hci": 0.74,
-            "haa": 0.91,
-            "reasoning_summary": "Manual CAP validation test via UI.",
-            "status": "pending"
-          }
+          {"cap_id":"demo-001","timestamp":"2025-10-29T00:00:00Z","domain":"Governance","context_mode":"Advisor","ems":"stable","cw":0.71,"ad":0.84,"hci":0.77,"hs":0.88,"haa":0.91,"er_delta":0.03,"validator_ethics":"compliant","validator_empathy":"aligned","validator_signatures":[{"validator":"athena-core","signature":"sha256-test-signature","timestamp":"2025-10-29T00:00:00Z"}],"reasoning_summary":"Manual CAP validation test.","laurie_version":"v3.4","governance_chain":{"hash_prev":"NULL","hash_next":null},"status":"pending"}
   repository_dispatch:
     types: [cap_validation, hic_validation, humanization_pass, whitepaper_release]
 
@@ -37,61 +27,43 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Prepare CAP_LOGS directory
-        run: mkdir -p $LEDGER_PATH
-
-      # ----------------------------------------------------------------
-      # Normalize CAP payload (auto-fix malformed GitHub workflow input)
-      # ----------------------------------------------------------------
-      - name: Normalize CAP payload
-        run: |
-          echo "${{ github.event.inputs.cap_payload }}" > raw_payload.txt
-          cat <<'EOF' > normalize.js
-          const fs = require('fs');
-          let text = fs.readFileSync('raw_payload.txt','utf8').trim();
-          try {
-            // Try direct JSON parse
-            JSON.parse(text);
-            fs.writeFileSync('cap_payload.json', text);
-          } catch {
-            // Attempt to repair if GitHub stripped quotes
-            try {
-              const repaired = text
-                .replace(/^'+|'+$/g,'')
-                .replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g,'$1"$2":')
-                .replace(/:\s*([A-Za-z0-9_.:-]+)(\s*[},])/g,':"$1"$2');
-              JSON.parse(repaired);
-              fs.writeFileSync('cap_payload.json', repaired);
-              console.log('Repaired and normalized payload.');
-            } catch (err) {
-              console.error('❌ Failed to normalize CAP payload:', err.message);
-              fs.writeFileSync('cap_payload.json', '{}');
-              console.log('Fallback: wrote empty object.');
-            }
-          }
-          EOF
-          node normalize.js
-          echo "=== CAP payload written ==="
-          ls -l cap_payload.json || echo "⚠️ cap_payload.json missing!"
-          cat cap_payload.json
-
-      # ----------------------------------------------------------------
-      # Schema debug & Node setup
-      # ----------------------------------------------------------------
-      - name: Debug Schema Header
-        run: |
-          echo "=== Printing first 10 lines of schema file ($SCHEMA_PATH) ==="
-          head -n 10 $SCHEMA_PATH
+        with:
+          clean: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # ----------------------------------------------------------------
-      # AJV schema validation
-      # ----------------------------------------------------------------
+      - name: Prepare directories
+        run: mkdir -p $LEDGER_PATH
+
+      - name: Write and normalize CAP payload
+        run: |
+          echo "=== Writing CAP payload input ==="
+          echo "${{ github.event.inputs.cap_payload }}" > raw_payload.txt
+          echo "Input saved to raw_payload.txt"
+          
+          echo "=== Installing Node dependencies ==="
+          npm install ajv@8 ajv-formats@2
+          
+          echo "=== Running normalization ==="
+          node normalize.js || true
+          
+          echo "=== Checking normalization result ==="
+          if [ ! -s cap_payload.json ]; then
+            echo "❌ cap_payload.json missing or empty. Exiting."
+            exit 1
+          fi
+          
+          echo "✅ Normalization complete. File contents:"
+          cat cap_payload.json
+
+      - name: Debug Schema Header
+        run: |
+          echo "=== Printing first 10 lines of schema file ($SCHEMA_PATH) ==="
+          head -n 10 $SCHEMA_PATH
+
       - name: Validate CAP JSON (Node/AJV 2020)
         id: schema_check
         run: |
@@ -116,9 +88,6 @@ jobs:
           node validate.js
         continue-on-error: false
 
-      # ----------------------------------------------------------------
-      # Generate CAP file & hash
-      # ----------------------------------------------------------------
       - name: Generate CAP filename and hash
         id: hash_gen
         run: |
@@ -134,18 +103,12 @@ jobs:
           echo "hash=$SHA256" >> $GITHUB_OUTPUT
           echo "Generated hash: $SHA256"
 
-      # ----------------------------------------------------------------
-      # Link previous CAP hash for ledger continuity
-      # ----------------------------------------------------------------
       - name: Link previous CAP hash
         run: |
           PREV_HASH=$(grep -m1 -h 'SHA256:' $(find $LEDGER_PATH -type f | sort | tail -n 1) 2>/dev/null || echo "SHA256:NULL")
           jq --arg prev "$PREV_HASH" '.governance_chain.hash_prev = $prev' cap_payload.json > cap_final.json
           mv cap_final.json cap_payload.json
 
-      # ----------------------------------------------------------------
-      # Commit CAP record to ledger (GitHub acts as canonical audit log)
-      # ----------------------------------------------------------------
       - name: Commit CAP record to ledger
         run: |
           FILE=${{ steps.hash_gen.outputs.file }}
@@ -154,55 +117,25 @@ jobs:
           git config user.name "Athena-Audit-Bot"
           git config user.email "audit-bot@falconforge.ai"
           git add "$FILE"
-          git commit -m "Add CAP record: ${{ github.event.inputs.cap_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}]" || echo "No changes to commit"
+          git commit -m "Add CAP record: ${{ github.event.inputs.cap_payload }} [${{ steps.hash_gen.outputs.hash }}]"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
 
-      # ----------------------------------------------------------------
-      # Optional: Zapier / Notion bridge (for Humanization dashboard)
-      # ----------------------------------------------------------------
-      - name: Send summary to Zapier (Notion Bridge)
+      - name: Send summary to Zapier or Notion
         if: ${{ always() }}
         env:
           ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
         run: |
-          if [ ! -f cap_payload.json ]; then
-            echo "⚠️ cap_payload.json not found, creating fallback empty object."
-            echo '{}' > cap_payload.json
-          fi
-
-          SUMMARY=$(jq -r '.reasoning_summary // "N/A"' cap_payload.json)
-          DOMAIN=$(jq -r '.domain // "unknown"' cap_payload.json)
-          STATUS=$(jq -r '.status // "undefined"' cap_payload.json)
-          CAP_ID=$(jq -r '.cap_id // "undefined"' cap_payload.json)
-          HCI=$(jq -r '.hci // 0' cap_payload.json)
-          HS=$(jq -r '.hs // 0' cap_payload.json)
-          HAA=$(jq -r '.haa // 0' cap_payload.json)
-          TIMESTAMP=$(jq -r '.timestamp // "unknown"' cap_payload.json)
-          HASH=${{ steps.hash_gen.outputs.hash }}
-
+          SUMMARY=$(jq -r '.reasoning_summary' cap_payload.json)
+          DOMAIN=$(jq -r '.domain' cap_payload.json)
+          STATUS=$(jq -r '.status' cap_payload.json)
           if [ -n "$ZAPIER_WEBHOOK_URL" ]; then
-            echo "📡 Dispatching CAP event to Zapier → Notion..."
             curl -X POST "$ZAPIER_WEBHOOK_URL" \
               -H "Content-Type: application/json" \
-              -d "{
-                \"cap_id\": \"$CAP_ID\",
-                \"domain\": \"$DOMAIN\",
-                \"status\": \"$STATUS\",
-                \"hci\": $HCI,
-                \"hs\": $HS,
-                \"haa\": $HAA,
-                \"schema_version\": \"$SCHEMA_VERSION\",
-                \"summary\": \"$SUMMARY\",
-                \"record_hash\": \"$HASH\",
-                \"timestamp\": \"$TIMESTAMP\"
-              }"
+              -d "{\"cap_id\": \"${{ github.event.client_payload.cap_id }}\", \"domain\": \"$DOMAIN\", \"status\": \"$STATUS\", \"summary\": \"$SUMMARY\", \"schema_version\": \"$SCHEMA_VERSION\" }"
           else
-            echo "⚠️ No Zapier webhook URL found. Skipping Notion sync."
+            echo "No Zapier webhook URL provided."
           fi
 
-      # ----------------------------------------------------------------
-      # Summary output
-      # ----------------------------------------------------------------
       - name: Output validation summary
         run: |
           echo "✅ CAP record committed successfully."
