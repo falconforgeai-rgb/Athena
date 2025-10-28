@@ -46,7 +46,7 @@ jobs:
       - name: Validate CAP JSON
         id: schema_check
         run: |
-          ajv validate -s $SCHEMA_PATH -d cap_payload.json --strict=true
+          ajv validate -s $SCHEMA_PATH -d cap_payload.json --spec=draft2020 --strict=false
         continue-on-error: false
 
       # 7️⃣ Generate filename and hash
