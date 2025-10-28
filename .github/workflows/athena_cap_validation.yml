@@ -2,8 +2,25 @@ name: Athena CAP Validation & Ledger Commit
 
 on:
   workflow_dispatch:
+    inputs:
+      cap_payload:
+        description: "CAP JSON payload (paste the inner object here)"
+        required: true
+        default: |
+          {
+            "cap_id": "test-001",
+            "timestamp": "2025-10-29T00:00:00Z",
+            "domain": "Governance",
+            "context_mode": "Advisor",
+            "hs": 0.88,
+            "hci": 0.74,
+            "haa": 0.91,
+            "reasoning_summary": "Manual CAP validation test via UI.",
+            "status": "pending"
+          }
   repository_dispatch:
     types: [cap_validation, hic_validation, humanization_pass, whitepaper_release]
+
 
 permissions:
   contents: write
@@ -27,10 +44,15 @@ jobs:
       - name: Prepare CAP_LOGS directory
         run: mkdir -p $LEDGER_PATH
 
-      - name: Write CAP payload to file
+     - name: Write CAP payload to file
         run: |
-          echo "${{ toJson(github.event.client_payload) }}" > cap_payload.json
+          if [ -n "${{ github.event.inputs.cap_payload }}" ]; then
+            echo "${{ github.event.inputs.cap_payload }}" > cap_payload.json
+          else
+           echo "${{ toJson(github.event.client_payload) }}" > cap_payload.json
+          fi
           cat cap_payload.json
+
 
       - name: Debug Schema Header
         run: |
