@@ -1,4 +1,5 @@
 name: Athena CAP Validation & Ledger Commit
+
 on:
   workflow_dispatch:
   repository_dispatch:
@@ -18,56 +19,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Create working directory for ledger logs
-      - name: Ensure CAP_LOGS directory exists
+      - name: Prepare CAP_LOGS directory
         run: mkdir -p $LEDGER_PATH
 
-      # 3️⃣ Write incoming payload to file
-      - name: Write CAP payload to temp file
+      - name: Write CAP payload to file
         run: |
           echo "${{ toJson(github.event.client_payload) }}" > cap_payload.json
           cat cap_payload.json
 
-      # 4️⃣ Install Node.js (for JSON schema validation)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # 5️⃣ Install AJV for schema validation
-      - name: Install AJV validator
-        run: npm install -g ajv-cli@5.0.0
+      - name: Validate CAP JSON (Node/AJV 2020)
+        id: schema_check
+        run: |
+          cat <<'EOF' > validate.js
+          const fs = require('fs');
+          const Ajv2020 = require('ajv/dist/2020');
+          const addFormats = require('ajv-formats');
+          const schema = JSON.parse(fs.readFileSync(process.env.SCHEMA_PATH));
+          const data = JSON.parse(fs.readFileSync('cap_payload.json'));
+          const ajv = new Ajv2020({ strict: false, allErrors: true });
+          addFormats(ajv);
+          const validate = ajv.compile(schema);
+          const valid = validate(data);
+          if (!valid) {
+            console.error('❌ Validation errors:', validate.errors);
+            process.exit(1);
+          } else {
+            console.log('✅ CAP JSON validated successfully.');
+          }
+          EOF
+          npm install ajv@8 ajv-formats@2
+          node validate.js
+        continue-on-error: false
 
-      # 6️⃣ Validate CAP JSON against schema
-- name: Validate CAP JSON (Node/AJV 2020)
-  id: schema_check
-  run: |
-    echo "const fs = require('fs'); 
-    const Ajv2020 = require('ajv/dist/2020');
-    const addFormats = require('ajv-formats');
-    const schema = JSON.parse(fs.readFileSync(process.env.SCHEMA_PATH));
-    const data = JSON.parse(fs.readFileSync('cap_payload.json'));
-    const ajv = new Ajv2020({ strict: false, allErrors: true });
-    addFormats(ajv);
-    const validate = ajv.compile(schema);
-    const valid = validate(data);
-    if (!valid) { 
-      console.error('❌ Validation errors:', validate.errors); 
-      process.exit(1); 
-    } else { 
-      console.log('✅ CAP JSON validated successfully.'); 
-    }" > validate.js
-
-    npm install ajv@8 ajv-formats@2
-    node validate.js
-  continue-on-error: false
-
-
-      # 7️⃣ Generate filename and hash
       - name: Generate CAP filename and hash
         id: hash_gen
         run: |
@@ -83,15 +74,13 @@ jobs:
           echo "hash=$SHA256" >> $GITHUB_OUTPUT
           echo "Generated hash: $SHA256"
 
-      # 8️⃣ Embed governance_chain.hash_prev for continuity
       - name: Link previous CAP hash
         run: |
           PREV_HASH=$(grep -m1 -h 'SHA256:' $(find $LEDGER_PATH -type f | sort | tail -n 1) 2>/dev/null || echo "SHA256:NULL")
-          jq --arg prev "SHA256:${{ steps.hash_gen.outputs.hash }}" '.governance_chain.hash_prev = $prev' cap_payload.json > cap_final.json
+          jq --arg prev "$PREV_HASH" '.governance_chain.hash_prev = $prev' cap_payload.json > cap_final.json
           mv cap_final.json cap_payload.json
 
-      # 9️⃣ Commit CAP record to ledger
-      - name: Commit CAP record
+      - name: Commit CAP record to ledger
         run: |
           FILE=${{ steps.hash_gen.outputs.file }}
           mkdir -p $(dirname "$FILE")
@@ -102,7 +91,6 @@ jobs:
           git commit -m "Add CAP record: ${{ github.event.client_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}]"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
 
-      # 🔟 Optional: Notify Zapier/Notion
       - name: Send summary to Zapier or Notion
         if: ${{ always() }}
         env:
@@ -111,13 +99,16 @@ jobs:
           SUMMARY=$(jq -r '.reasoning_summary' cap_payload.json)
           DOMAIN=$(jq -r '.domain' cap_payload.json)
           STATUS=$(jq -r '.status' cap_payload.json)
-          curl -X POST "$ZAPIER_WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d "{\"cap_id\": \"${{ github.event.client_payload.cap_id }}\", \"domain\": \"$DOMAIN\", \"status\": \"$STATUS\", \"summary\": \"$SUMMARY\", \"schema_version\": \"$SCHEMA_VERSION\" }"
+          if [ -n "$ZAPIER_WEBHOOK_URL" ]; then
+            curl -X POST "$ZAPIER_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"cap_id\": \"${{ github.event.client_payload.cap_id }}\", \"domain\": \"$DOMAIN\", \"status\": \"$STATUS\", \"summary\": \"$SUMMARY\", \"schema_version\": \"$SCHEMA_VERSION\" }"
+          else
+            echo "No Zapier webhook URL provided."
+          fi
 
-      # ✅ Verification Summary
       - name: Output validation summary
         run: |
-          echo "CAP Record committed successfully."
+          echo "✅ CAP record committed successfully."
           echo "Schema Version: $SCHEMA_VERSION"
           echo "Record Hash: ${{ steps.hash_gen.outputs.hash }}"
