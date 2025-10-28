@@ -32,7 +32,6 @@ jobs:
           echo "${{ toJson(github.event.client_payload) }}" > cap_payload.json
           cat cap_payload.json
 
-      # 🧩 Debug step: print first lines of the schema file seen by the runner
       - name: Debug Schema Header
         run: |
           echo "=== Printing first 10 lines of schema file ($SCHEMA_PATH) ==="
