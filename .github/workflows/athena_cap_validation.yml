@@ -1,5 +1,10 @@
 name: Athena CAP Validation & Ledger Commit
 
+      - name: Debug Schema Header
+        run: |
+          head -n 10 $SCHEMA_PATH
+
+
 on:
   workflow_dispatch:
   repository_dispatch:
