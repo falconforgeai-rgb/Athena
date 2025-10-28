@@ -18,8 +18,6 @@ on:
             "reasoning_summary": "Manual CAP validation test via UI.",
             "status": "pending"
           }
-  repository_dispatch:
-    types: [cap_validation, hic_validation, humanization_pass, whitepaper_release]
 
 permissions:
   contents: write
@@ -31,24 +29,23 @@ env:
 
 jobs:
   validate_and_commit:
-    name: Validate CAP Payload and Commit to Ledger
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          clean: true
 
       - name: Prepare CAP_LOGS directory
         run: mkdir -p $LEDGER_PATH
 
-      - name: Write CAP payload to file
+      - name: Normalize CAP payload
         run: |
-          if [ -n "${{ github.event.inputs.cap_payload }}" ]; then
-            echo "${{ github.event.inputs.cap_payload }}" | jq '.' > cap_payload.json
+          echo "${{ github.event.inputs.cap_payload }}" > raw_payload.txt
+          # Try to parse; if it fails (means input was quoted), unwrap it
+          if ! jq empty raw_payload.txt 2>/dev/null; then
+            echo "Unwrapping quoted input..."
+            cat raw_payload.txt | jq -R 'fromjson' > cap_payload.json
           else
-            echo "${{ toJson(github.event.client_payload) }}" | jq '.' > cap_payload.json
+            mv raw_payload.txt cap_payload.json
           fi
           echo "=== CAP payload written ==="
           cat cap_payload.json
@@ -64,7 +61,6 @@ jobs:
           node-version: "20"
 
       - name: Validate CAP JSON (Node/AJV 2020)
-        id: schema_check
         run: |
           cat <<'EOF' > validate.js
           const fs = require('fs');
@@ -85,7 +81,6 @@ jobs:
           EOF
           npm install ajv@8 ajv-formats@2
           node validate.js
-        continue-on-error: false
 
       - name: Generate CAP filename and hash
         id: hash_gen
@@ -102,12 +97,6 @@ jobs:
           echo "hash=$SHA256" >> $GITHUB_OUTPUT
           echo "Generated hash: $SHA256"
 
-      - name: Link previous CAP hash
-        run: |
-          PREV_HASH=$(grep -m1 -h 'SHA256:' $(find $LEDGER_PATH -type f | sort | tail -n 1) 2>/dev/null || echo "SHA256:NULL")
-          jq --arg prev "$PREV_HASH" '.governance_chain.hash_prev = $prev' cap_payload.json > cap_final.json
-          mv cap_final.json cap_payload.json
-
       - name: Commit CAP record to ledger
         run: |
           FILE=${{ steps.hash_gen.outputs.file }}
@@ -116,43 +105,8 @@ jobs:
           git config user.name "Athena-Audit-Bot"
           git config user.email "audit-bot@falconforge.ai"
           git add "$FILE"
-          git commit -m "Add CAP record: ${{ github.event.client_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}]"
+          git commit -m "Add CAP record: ${{ github.event.inputs.cap_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}]"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
-
-      - name: Send summary to Zapier (Notion Bridge)
-        if: ${{ always() }}
-        env:
-          ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
-        run: |
-          SUMMARY=$(jq -r '.reasoning_summary' cap_payload.json)
-          DOMAIN=$(jq -r '.domain' cap_payload.json)
-          STATUS=$(jq -r '.status' cap_payload.json)
-          CAP_ID=$(jq -r '.cap_id' cap_payload.json)
-          HCI=$(jq -r '.hci' cap_payload.json)
-          HS=$(jq -r '.hs' cap_payload.json)
-          HAA=$(jq -r '.haa' cap_payload.json)
-          TIMESTAMP=$(jq -r '.timestamp' cap_payload.json)
-          HASH=${{ steps.hash_gen.outputs.hash }}
-
-          if [ -n "$ZAPIER_WEBHOOK_URL" ]; then
-            echo "📡 Dispatching CAP event to Zapier → Notion..."
-            curl -X POST "$ZAPIER_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d "{
-                \"cap_id\": \"$CAP_ID\",
-                \"domain\": \"$DOMAIN\",
-                \"status\": \"$STATUS\",
-                \"hci\": $HCI,
-                \"hs\": $HS,
-                \"haa\": $HAA,
-                \"schema_version\": \"$SCHEMA_VERSION\",
-                \"summary\": \"$SUMMARY\",
-                \"record_hash\": \"$HASH\",
-                \"timestamp\": \"$TIMESTAMP\"
-              }"
-          else
-            echo "⚠️ No Zapier webhook URL found. Skipping Notion sync."
-          fi
 
       - name: Output validation summary
         run: |
