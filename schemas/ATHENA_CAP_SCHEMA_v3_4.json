@@ -1,9 +1,9 @@
 {
-"$schema": "[https://json-schema.org/draft/2020-12/schema](https://json-schema.org/draft/2020-12/schema)",
-"$id": "[https://falconforge.ai/schema/athena_cap_v3_4.json](https://falconforge.ai/schema/athena_cap_v3_4.json)",
-"title": "Athena Compassion + Humanization Audit Pass (CAP) Schema v3.4",
-"description": "Unified ethical, emotional, and humanization validation schema for all Athena reasoning and communication outputs.",
-"type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://falconforge.ai/schema/athena_cap_v3_4.json",
+  "title": "Athena Compassion + Humanization Audit Pass (CAP) Schema v3.4",
+  "description": "Unified ethical, emotional, and humanization validation schema for all Athena reasoning and communication outputs.",
+  "type": "object",
 "properties": {
 "cap_id": {
 "type": "string",
