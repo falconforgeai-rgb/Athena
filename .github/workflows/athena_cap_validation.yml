@@ -1,5 +1,6 @@
 name: Athena CAP Validation & Ledger Commit
 on:
+  workflow_dispatch:
   repository_dispatch:
     types: [cap_validation, hic_validation, humanization_pass, whitepaper_release]
 
