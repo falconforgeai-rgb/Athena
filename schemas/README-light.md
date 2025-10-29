@@ -1,3 +1,32 @@
+---
+title: "Athena CAP Ledger — Schemas Directory"
+version: "v3.4"
+maintainer: "Athena (Steward) — FalconForgeAI Labs"
+schema_root: "./schemas"
+canonical_schema: "ATHENA_CAP_SCHEMA_v3_4.json"
+cap_version: "3.4"
+laurie_engine: "Active"
+humanization_layer: true
+governance_chain: "FalconForge_Integrity_Manifest_v3.4.json"
+description: >
+  Canonical schema definitions for Athena’s Compassion + Humanization Audit Pass (CAP) system.
+  Each JSON schema encodes measurable empathy and ethics telemetry, forming the foundation of the
+  Humanization Engine and Compassion + Humanization Audit Chain (CHAC). 
+  All schema validations feed directly into Athena’s immutable CAP Ledger.
+tags:
+  - "Athena"
+  - "CAP"
+  - "FalconForgeAI"
+  - "Humanization"
+  - "Ethics"
+  - "Empathy"
+  - "Governance"
+license: "FalconForgeAI Internal — Ethical Commons 1.0"
+last_updated: "2025-10-29"
+integrity_ref: "SHA256:TO_BE_GENERATED_AFTER_BUILD"
+---
+
+
 📘 Purpose
 
 The /schemas directory contains the canonical JSON Schema definitions governing Athena’s Compassion + Humanization Audit Pass (CAP) system.
