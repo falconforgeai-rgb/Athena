@@ -1,0 +1,147 @@
+name: Athena CAP Dual Validation & Ledger Commit
+
+on:
+  workflow_dispatch:
+    inputs:
+      cap_payload:
+        description: "CAP payload — paste JSON or Base64 string here"
+        required: true
+        default: |
+          {
+            "cap_id": "550e8400-e29b-41d4-a716-446655440000",
+            "timestamp": "2025-10-29T04:00:00Z",
+            "domain": "Governance",
+            "context_mode": "Advisor",
+            "ems": 0.78,
+            "cw": 0.21,
+            "ad": 0.18,
+            "hci": 0.77,
+            "hs": 0.88,
+            "haa": 0.91,
+            "er_delta": 0.03,
+            "validator_ethics": "compliant",
+            "validator_empathy": "aligned",
+            "validator_signatures": {
+              "validator": "athena-core",
+              "signature": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+              "ethics_signature": "1111111111111111111111111111111111111111111111111111111111111111",
+              "empathy_signature": "2222222222222222222222222222222222222222222222222222222222222222",
+              "timestamp": "2025-10-29T04:00:00Z"
+            },
+            "reasoning_summary": "Full CAP validation test payload matching v3.4 schema.",
+            "laurie_version": "v3.4",
+            "governance_chain": {
+              "hash_prev": "SHA256:0000000000000000000000000000000000000000000000000000000000000000",
+              "hash_next": "SHA256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "status": "pending"
+          }
+
+permissions:
+  contents: write
+
+env:
+  SCHEMA_PATH: "./schemas/ATHENA_CAP_SCHEMA_v3_4.json"
+  LEDGER_PATH: "./CAP_LOGS"
+  SCHEMA_VERSION: "v3.4"
+
+jobs:
+  validate_and_commit:
+    name: Validate CAP Payload and Commit to Ledger
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Prepare CAP_LOGS directory
+        run: mkdir -p $LEDGER_PATH
+
+      - name: Decode or Write Payload
+        id: decode_payload
+        run: |
+          echo "📦 Checking CAP payload type..."
+          INPUT="${{ github.event.inputs.cap_payload }}"
+          echo "$INPUT" > raw_payload.txt
+
+          # Detect Base64 by checking if it's a long single-line and decodable
+          if echo "$INPUT" | grep -q '^[A-Za-z0-9+/=]\{40,\}$'; then
+            echo "Detected Base64 input — decoding..."
+            echo "$INPUT" | base64 --decode > cap_payload.json || {
+              echo "❌ Base64 decode failed"
+              exit 1
+            }
+          else
+            echo "Detected plain JSON input — writing directly..."
+            echo "$INPUT" | jq '.' > cap_payload.json || {
+              echo "❌ Invalid JSON input"
+              exit 1
+            }
+          fi
+          echo "✅ CAP payload successfully prepared."
+          cat cap_payload.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate CAP JSON (Node/AJV 2020)
+        id: schema_check
+        run: |
+          cat <<'EOF' > validate.js
+          const fs = require('fs');
+          const Ajv2020 = require('ajv/dist/2020');
+          const addFormats = require('ajv-formats');
+          const schema = JSON.parse(fs.readFileSync(process.env.SCHEMA_PATH));
+          const data = JSON.parse(fs.readFileSync('cap_payload.json'));
+          const ajv = new Ajv2020({ strict: false, allErrors: true });
+          addFormats(ajv);
+          const validate = ajv.compile(schema);
+          const valid = validate(data);
+          if (!valid) {
+            console.error('❌ Validation errors:', validate.errors);
+            process.exit(1);
+          } else {
+            console.log('✅ CAP JSON validated successfully.');
+          }
+          EOF
+          npm install ajv@8 ajv-formats@2
+          node validate.js
+
+      - name: Generate CAP filename and hash
+        id: hash_gen
+        run: |
+          TIMESTAMP=$(jq -r '.timestamp' cap_payload.json | tr -d '":')
+          CAP_ID=$(jq -r '.cap_id' cap_payload.json)
+          DOMAIN=$(jq -r '.domain' cap_payload.json | tr '[:upper:]' '[:lower:]')
+          YEAR=$(date -u +"%Y")
+          MONTH=$(date -u +"%m")
+          FILEPATH="$LEDGER_PATH/$YEAR/$MONTH/${DOMAIN}_${CAP_ID}.json"
+          mkdir -p $(dirname "$FILEPATH")
+          SHA256=$(sha256sum cap_payload.json | awk '{print $1}')
+          echo "file=$FILEPATH" >> $GITHUB_OUTPUT
+          echo "hash=$SHA256" >> $GITHUB_OUTPUT
+          echo "Generated hash: $SHA256"
+
+      - name: Commit CAP record to ledger
+        run: |
+          FILE=${{ steps.hash_gen.outputs.file }}
+          mkdir -p $(dirname "$FILE")
+          cp cap_payload.json "$FILE"
+          git config user.name "Athena-Audit-Bot"
+          git config user.email "audit-bot@falconforge.ai"
+          git add "$FILE"
+          git commit -m "Add CAP record: ${{ github.event.inputs.cap_payload }} [${{ steps.hash_gen.outputs.hash }}]"
+          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
+
+      - name: Upload validation artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAP_Validation_${{ github.run_number }}
+          path: |
+            cap_payload.json
+            raw_payload.txt
