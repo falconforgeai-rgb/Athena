@@ -1,4 +1,10 @@
-name: Athena CAP Validation & Ledger Commit (Stable JSON)
+# ==========================================================
+#  FalconForgeAI Labs — Athena CAP Validation & Dual Commit
+#  Version: v3.4 | Maintainer: Athena (Steward)
+#  Purpose: Validate CAP payloads → Commit to Ledger → Push to Zapier
+# ==========================================================
+
+name: Athena CAP Validation & Ledger Commit (Dual Sync)
 
 on:
   workflow_dispatch:
@@ -31,47 +37,50 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 env:
   SCHEMA_PATH: "./schemas/ATHENA_CAP_SCHEMA_v3_4.json"
   LEDGER_PATH: "./CAP_LOGS"
   SCHEMA_VERSION: "v3.4"
+  GH_PAT: ${{ secrets.GH_PAT }}
+  ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
 
 jobs:
   validate_and_commit:
-    name: Validate CAP Payload and Commit to Ledger
+    name: Validate CAP Payload → Commit → Zapier
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      # Step 1 — Checkout
+      - name: 🧭 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Write CAP payload to file safely
+      # Step 2 — Write input safely
+      - name: 🧩 Write CAP payload to file
         run: |
-          echo "📦 Checking CAP payload type..."
           echo '${{ inputs.cap_payload }}' > cap_payload_raw.txt
-          echo "🧩 Raw CAP payload written to cap_payload_raw.txt"
-          cat cap_payload_raw.txt
-          # Validate JSON before proceeding
           if ! jq empty cap_payload_raw.txt; then
-            echo "❌ Invalid JSON in workflow input."
+            echo "❌ Invalid JSON input."
             exit 1
           fi
           jq . cap_payload_raw.txt > cap_payload.json
-          echo "✅ JSON validated and normalized to cap_payload.json"
-          cat cap_payload.json
+          echo "✅ CAP payload validated and normalized."
 
-      - name: Debug Schema Header
+      # Step 3 — Debug header
+      - name: 🧠 Print schema header
         run: |
-          echo "=== Printing first 10 lines of schema file ($SCHEMA_PATH) ==="
+          echo "=== Schema Header Preview ($SCHEMA_PATH) ==="
           head -n 10 $SCHEMA_PATH
 
-      - name: Setup Node.js
+      # Step 4 — Node setup
+      - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Validate CAP JSON (AJV 2020)
+      # Step 5 — Validate JSON against CAP schema
+      - name: 🧮 Validate CAP JSON (AJV 2020)
         run: |
           cat <<'EOF' > validate.js
           const fs = require('fs');
@@ -93,7 +102,8 @@ jobs:
           npm install ajv@8 ajv-formats@2
           node validate.js
 
-      - name: Commit CAP record (if valid)
+      # Step 6 — Commit to CAP Ledger
+      - name: 🪶 Commit CAP record to Ledger
         run: |
           YEAR=$(date -u +"%Y")
           MONTH=$(date -u +"%m")
@@ -104,10 +114,29 @@ jobs:
           git config user.name "Athena-Audit-Bot"
           git config user.email "audit-bot@falconforge.ai"
           git add "$FILE"
-          git commit -m "Add CAP record: ${UUID:-anonymous}"
+          git commit -m "Add CAP record: ${UUID:-anonymous} | Schema $SCHEMA_VERSION"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
 
-      - name: Output summary
+      # Step 7 — Optional: Send to Zapier pipeline (if webhook exists)
+      - name: 🔗 Push CAP event to Zapier (optional)
+        if: env.ZAPIER_WEBHOOK_URL != ''
         run: |
-          echo "✅ CAP record processed successfully."
-          jq '.cap_id, .status, .reasoning_summary' cap_payload.json
+          echo "📡 Sending CAP record to Zapier..."
+          jq --arg repo "${{ github.repository }}" \
+             --arg run_id "${{ github.run_id }}" \
+             '. + {repo: $repo, run_id: $run_id, schema_version: env.SCHEMA_VERSION}' cap_payload.json \
+             > zap_payload.json
+          curl -X POST -H "Content-Type: application/json" \
+               -d @zap_payload.json \
+               "${{ env.ZAPIER_WEBHOOK_URL }}"
+          echo "✅ CAP record dispatched to Zapier."
+
+      # Step 8 — Summary Output
+      - name: 🧾 Output Summary
+        run: |
+          echo "======================================"
+          echo "✅ CAP Record Processed Successfully"
+          echo "Repository: ${{ github.repository }}"
+          echo "Schema Version: $SCHEMA_VERSION"
+          jq '.cap_id, .domain, .status, .reasoning_summary' cap_payload.json
+          echo "======================================"
