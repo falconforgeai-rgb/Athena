@@ -1,10 +1,10 @@
-name: Athena CAP Dual Validation & Ledger Commit (with Signature Check)
+name: Athena CAP Dual Validation & Ledger Commit (Canonical + Signature Check)
 
 on:
   workflow_dispatch:
     inputs:
       cap_payload:
-        description: "CAP payload — paste JSON or Base64 string here"
+        description: "CAP payload — paste JSON or Base64 here"
         required: true
         default: |
           {
@@ -23,9 +23,9 @@ on:
             "validator_empathy": "aligned",
             "validator_signatures": {
               "validator": "athena-core",
-              "signature": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-              "ethics_signature": "1111111111111111111111111111111111111111111111111111111111111111",
-              "empathy_signature": "2222222222222222222222222222222222222222222222222222222222222222",
+              "signature": "SHA256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+              "ethics_signature": "SHA256:1111111111111111111111111111111111111111111111111111111111111111",
+              "empathy_signature": "SHA256:2222222222222222222222222222222222222222222222222222222222222222",
               "timestamp": "2025-10-29T04:00:00Z"
             },
             "reasoning_summary": "Full CAP validation test payload matching v3.4 schema.",
@@ -79,6 +79,7 @@ jobs:
               exit 1
             }
           fi
+
           echo "✅ CAP payload successfully prepared."
           cat cap_payload.json
 
@@ -86,6 +87,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Normalize CAP JSON
+        run: |
+          echo "📘 Normalizing CAP JSON for deterministic hashing..."
+          node normalize.js cap_payload.json
+          echo "✅ Normalization complete."
+          cat cap_payload.json
 
       - name: Validate CAP JSON (Node/AJV 2020 + Signature Check)
         id: schema_check
@@ -112,23 +120,23 @@ jobs:
 
           console.log('✅ CAP JSON schema validation passed.');
 
-          // === Signature Integrity Verification ===
-          const serialized = JSON.stringify(data, Object.keys(data).sort());
-          const hash = crypto.createHash('sha256').update(serialized).digest('hex');
-          const expected = data.validator_signatures?.ethics_signature?.replace(/^SHA256:/, '');
+          // === Ethics Signature Verification ===
+          const canonical = JSON.stringify(data, Object.keys(data).sort());
+          const computedHash = crypto.createHash('sha256').update(canonical).digest('hex');
+          const declared = data.validator_signatures?.ethics_signature?.replace(/^SHA256:/, '');
 
-          if (!expected) {
+          if (!declared) {
             console.error('❌ Missing ethics_signature in validator_signatures.');
             process.exit(1);
           }
 
-          console.log('🔍 Computed Hash:', hash);
-          console.log('🔍 Declared Ethics Signature:', expected);
+          console.log('🔍 Computed Hash:', computedHash);
+          console.log('🔍 Declared Ethics Signature:', declared);
 
-          if (hash.toLowerCase() === expected.toLowerCase()) {
+          if (computedHash.toLowerCase() === declared.toLowerCase()) {
             console.log('✅ Ethics signature integrity verified successfully.');
           } else {
-            console.error('⚠️ Ethics signature mismatch detected.');
+            console.error('⚠️ Ethics signature mismatch detected!');
             process.exit(2);
           }
           EOF
@@ -162,11 +170,11 @@ jobs:
           git commit -m "Add CAP record: ${{ steps.hash_gen.outputs.hash }}"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
 
-      - name: Upload validation artifacts
+      - name: Upload Validation Artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: CAP_Validation_${{ github.run_number }}
+          name: CAP_Validation_Run_${{ github.run_number }}
           path: |
             cap_payload.json
             raw_payload.txt
