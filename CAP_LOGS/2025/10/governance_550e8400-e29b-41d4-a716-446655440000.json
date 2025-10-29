@@ -1,0 +1,29 @@
+{
+  "cap_id": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2025-10-29T04:00:00Z",
+  "domain": "Governance",
+  "context_mode": "Advisor",
+  "ems": 0.78,
+  "cw": 0.21,
+  "ad": 0.18,
+  "hci": 0.77,
+  "hs": 0.88,
+  "haa": 0.91,
+  "er_delta": 0.03,
+  "validator_ethics": "compliant",
+  "validator_empathy": "aligned",
+  "validator_signatures": {
+    "validator": "athena-core",
+    "signature": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    "ethics_signature": "1111111111111111111111111111111111111111111111111111111111111111",
+    "empathy_signature": "2222222222222222222222222222222222222222222222222222222222222222",
+    "timestamp": "2025-10-29T04:00:00Z"
+  },
+  "reasoning_summary": "Full CAP validation test payload matching v3.4 schema.",
+  "laurie_version": "v3.4",
+  "governance_chain": {
+    "hash_prev": "SHA256:0000000000000000000000000000000000000000000000000000000000000000",
+    "hash_next": "SHA256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "status": "pending"
+}
