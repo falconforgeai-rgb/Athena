@@ -1,50 +1,65 @@
-// send_cap_to_zapier.js
-// FalconForge-Athena v3.4 — CAP → Zapier Bridge
-// Authored by Athena (Steward) — FalconForgeAI Labs
+/**
+ * Athena CAP → Zapier Dispatch Bridge (v3.4)
+ * Authored by FalconForgeAI Labs — Verified by Athena
+ *
+ * Reads a CAP JSON file, computes checksum, validates environment safety,
+ * and securely POSTs it to the configured Zapier Webhook.
+ */
 
 import fs from "fs";
 import crypto from "crypto";
 import fetch from "node-fetch";
 
-const ZAPIER_WEBHOOK_URL = process.env.ZAPIER_WEBHOOK_URL || "https://hooks.zapier.com/hooks/catch/25103684/urxqhrn/";
-const CAP_FILE_PATH = process.argv[2] || "./cap_record.json"; // optional CLI argument
-
-// === Helper: compute SHA-256 checksum for payload integrity ===
-function computeChecksum(data) {
-  const jsonString = typeof data === "string" ? data : JSON.stringify(data);
-  return crypto.createHash("sha256").update(jsonString).digest("hex");
-}
-
 async function main() {
+  const capPath = process.argv[2];
+
+  // === Safety Layer ===
+  if (!process.env.ZAPIER_WEBHOOK_URL) {
+    console.error("❌ Missing environment variable: ZAPIER_WEBHOOK_URL");
+    console.error("   → Set it in your GitHub Secrets or export it locally before running.");
+    process.exit(1);
+  }
+
+  if (!capPath || !fs.existsSync(capPath)) {
+    console.error(`❌ CAP file not found: ${capPath}`);
+    console.error("   → Usage: node send_cap_to_zapier.js ./path/to/cap_record.json");
+    process.exit(1);
+  }
+
+  // === Read and Validate File ===
+  console.log(`🔍 Reading CAP file: ${capPath}`);
+  let capData;
   try {
-    console.log("🔍 Reading CAP file:", CAP_FILE_PATH);
-    const capData = JSON.parse(fs.readFileSync(CAP_FILE_PATH, "utf8"));
+    const raw = fs.readFileSync(capPath, "utf8");
+    capData = JSON.parse(raw);
+  } catch (err) {
+    console.error("❌ Failed to parse CAP JSON:", err.message);
+    process.exit(1);
+  }
 
-    const checksum = computeChecksum(capData);
-    capData.ledger_hash = checksum;
-    capData.dispatch_timestamp = new Date().toISOString();
+  // === Compute Hash ===
+  const hash = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(capData))
+    .digest("hex");
+  console.log(`🧠 CAP payload checksum: ${hash}`);
 
-    console.log("🧠 CAP payload checksum:", checksum);
-    console.log("🌐 Sending payload to Zapier...");
-
-    const response = await fetch(ZAPIER_WEBHOOK_URL, {
+  // === Dispatch to Zapier ===
+  console.log("🌐 Sending payload to Zapier...");
+  try {
+    const response = await fetch(process.env.ZAPIER_WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(capData),
+      body: JSON.stringify({ ...capData, ledger_hash: hash }),
     });
 
+    const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const body = await response.text();
-      console.error("❌ Zapier rejected request:", response.status, body);
-      process.exit(1);
+      throw new Error(`HTTP ${response.status}: ${JSON.stringify(result)}`);
     }
 
-    const result = await response.json().catch(() => ({}));
     console.log("✅ CAP successfully transmitted to Zapier.");
     console.log("📬 Zapier response:", result);
-
-    // optional safety tip output
-    console.log("\n🛡️  Tip: To chain this automatically, call this script at the end of your CAP validation workflow.");
   } catch (err) {
     console.error("💥 Error sending CAP to Zapier:", err);
     process.exit(1);
