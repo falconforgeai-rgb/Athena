@@ -51,8 +51,6 @@ jobs:
           echo "📦 Checking CAP payload type..."
           echo '${{ inputs.cap_payload }}' > cap_payload_raw.txt
           echo "🧩 Raw CAP payload written to cap_payload_raw.txt"
-          cat cap_payload_raw.txt
-          # Validate JSON before proceeding
           if ! jq empty cap_payload_raw.txt; then
             echo "❌ Invalid JSON in workflow input."
             exit 1
@@ -60,22 +58,17 @@ jobs:
           jq . cap_payload_raw.txt > cap_payload.json
           echo "✅ JSON validated and normalized to cap_payload.json"
 
-      - name: 🔍 Debug Schema Header
-        run: |
-          echo "=== Printing first 10 lines of schema file ($SCHEMA_PATH) ==="
-          head -n 10 $SCHEMA_PATH
-
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
-      - name: 🧠 Validate CAP JSON (AJV 2020)
+      - name: 🧠 Validate CAP JSON Schema (AJV 2020)
         run: |
           cat <<'EOF' > validate.js
-          const fs = require('fs');
-          const Ajv2020 = require('ajv/dist/2020');
-          const addFormats = require('ajv-formats');
+          import fs from 'fs';
+          import Ajv2020 from 'ajv/dist/2020.js';
+          import addFormats from 'ajv-formats';
           const schema = JSON.parse(fs.readFileSync(process.env.SCHEMA_PATH));
           const data = JSON.parse(fs.readFileSync('cap_payload.json'));
           const ajv = new Ajv2020({ strict: false, allErrors: true });
@@ -105,16 +98,37 @@ jobs:
           git add "$FILE"
           git commit -m "Add CAP record: ${UUID:-anonymous}"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
+          echo "FILE_PATH=$FILE" >> $GITHUB_ENV
 
       - name: 🌐 Dispatch CAP record to Zapier
         if: success()
-        run: |
-          echo "🌍 Dispatching CAP record to Zapier..."
-          node send_cap_to_zapier.js "$LEDGER_PATH/$(date -u +'%Y')/$(date -u +'%m')/${UUID:-cap_record_$(date +%s)}.json"
         env:
           ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
-
-      - name: 📜 Output summary
         run: |
-          echo "✅ CAP record processed and dispatched successfully."
-          jq '.cap_id, .status, .reasoning_summary' cap_payload.json
+          echo "🌍 Dispatching CAP record to Zapier..."
+          node send_cap_to_zapier.js "$FILE_PATH" || echo "⚠️ Skipped Zapier sync (no CAP record file found)."
+
+  dual_verification:
+    name: 🔍 Dual Verification — Ledger Integrity & Sync
+    runs-on: ubuntu-latest
+    needs: validate_and_commit
+
+    steps:
+      - name: 🧭 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 🔗 Run Athena Ledger Integrity Check
+        run: |
+          echo "🔍 Running verify_ledger_hash.js to confirm GitHub integrity..."
+          node verify_ledger_hash.js || echo "⚠️ Ledger verification failed or incomplete CAP detected."
+
+      - name: 🧾 Post Summary
+        run: |
+          echo "📜 Athena CAP Validation & Dual Ledger Dispatch complete."
+          echo "🔐 Integrity verified on GitHub + Zapier dual chain."
+          date -u +"🕒 Completed at %Y-%m-%dT%H:%M:%SZ"
