@@ -1,10 +1,4 @@
-# ==========================================================
-#  FalconForgeAI Labs — Athena CAP Validation & Dual Commit
-#  Version: v3.4 | Maintainer: Athena (Steward)
-#  Purpose: Validate CAP payloads → Commit to Ledger → Push to Zapier
-# ==========================================================
-
-name: Athena CAP Validation & Ledger Commit (Dual Sync)
+name: Athena CAP Validation & Dual Ledger Dispatch (v3.4)
 
 on:
   workflow_dispatch:
@@ -17,16 +11,16 @@ on:
             "timestamp": "2025-10-30T00:00:00Z",
             "domain": "Governance",
             "context_mode": "Advisor",
-            "ems": 0.78,
-            "cw": 0.21,
-            "ad": 0.18,
-            "hci": 0.77,
-            "hs": 0.88,
-            "haa": 0.91,
-            "er_delta": 0.03,
+            "ems": 0.83,
+            "cw": 0.24,
+            "ad": 0.16,
+            "hci": 0.81,
+            "hs": 0.89,
+            "haa": 0.92,
+            "er_delta": 0.04,
             "validator_ethics": "compliant",
             "validator_empathy": "aligned",
-            "reasoning_summary": "Local CAP validation test run.",
+            "reasoning_summary": "Athena correctly identified proportional ethical balance in advisory context, demonstrating empathy-awareness in decision alignment.",
             "laurie_version": "v3.4",
             "governance_chain": {
               "hash_prev": "SHA256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -37,50 +31,46 @@ on:
 
 permissions:
   contents: write
-  actions: read
 
 env:
   SCHEMA_PATH: "./schemas/ATHENA_CAP_SCHEMA_v3_4.json"
   LEDGER_PATH: "./CAP_LOGS"
   SCHEMA_VERSION: "v3.4"
-  GH_PAT: ${{ secrets.GH_PAT }}
-  ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
 
 jobs:
   validate_and_commit:
-    name: Validate CAP Payload → Commit → Zapier
+    name: Validate CAP Payload and Commit to Ledger
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1 — Checkout
       - name: 🧭 Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2 — Write input safely
-      - name: 🧩 Write CAP payload to file
+      - name: 🧩 Write CAP payload to file safely
         run: |
+          echo "📦 Checking CAP payload type..."
           echo '${{ inputs.cap_payload }}' > cap_payload_raw.txt
+          echo "🧩 Raw CAP payload written to cap_payload_raw.txt"
+          cat cap_payload_raw.txt
+          # Validate JSON before proceeding
           if ! jq empty cap_payload_raw.txt; then
-            echo "❌ Invalid JSON input."
+            echo "❌ Invalid JSON in workflow input."
             exit 1
           fi
           jq . cap_payload_raw.txt > cap_payload.json
-          echo "✅ CAP payload validated and normalized."
+          echo "✅ JSON validated and normalized to cap_payload.json"
 
-      # Step 3 — Debug header
-      - name: 🧠 Print schema header
+      - name: 🔍 Debug Schema Header
         run: |
-          echo "=== Schema Header Preview ($SCHEMA_PATH) ==="
+          echo "=== Printing first 10 lines of schema file ($SCHEMA_PATH) ==="
           head -n 10 $SCHEMA_PATH
 
-      # Step 4 — Node setup
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # Step 5 — Validate JSON against CAP schema
-      - name: 🧮 Validate CAP JSON (AJV 2020)
+      - name: 🧠 Validate CAP JSON (AJV 2020)
         run: |
           cat <<'EOF' > validate.js
           const fs = require('fs');
@@ -102,8 +92,7 @@ jobs:
           npm install ajv@8 ajv-formats@2
           node validate.js
 
-      # Step 6 — Commit to CAP Ledger
-      - name: 🪶 Commit CAP record to Ledger
+      - name: 🪶 Commit CAP record (if valid)
         run: |
           YEAR=$(date -u +"%Y")
           MONTH=$(date -u +"%m")
@@ -114,29 +103,18 @@ jobs:
           git config user.name "Athena-Audit-Bot"
           git config user.email "audit-bot@falconforge.ai"
           git add "$FILE"
-          git commit -m "Add CAP record: ${UUID:-anonymous} | Schema $SCHEMA_VERSION"
+          git commit -m "Add CAP record: ${UUID:-anonymous}"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
 
-      # Step 7 — Optional: Send to Zapier pipeline (if webhook exists)
-      - name: 🔗 Push CAP event to Zapier (optional)
-        if: env.ZAPIER_WEBHOOK_URL != ''
+      - name: 🌐 Dispatch CAP record to Zapier
+        if: success()
         run: |
-          echo "📡 Sending CAP record to Zapier..."
-          jq --arg repo "${{ github.repository }}" \
-             --arg run_id "${{ github.run_id }}" \
-             '. + {repo: $repo, run_id: $run_id, schema_version: env.SCHEMA_VERSION}' cap_payload.json \
-             > zap_payload.json
-          curl -X POST -H "Content-Type: application/json" \
-               -d @zap_payload.json \
-               "${{ env.ZAPIER_WEBHOOK_URL }}"
-          echo "✅ CAP record dispatched to Zapier."
+          echo "🌍 Dispatching CAP record to Zapier..."
+          node send_cap_to_zapier.js "$LEDGER_PATH/$(date -u +'%Y')/$(date -u +'%m')/${UUID:-cap_record_$(date +%s)}.json"
+        env:
+          ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
 
-      # Step 8 — Summary Output
-      - name: 🧾 Output Summary
+      - name: 📜 Output summary
         run: |
-          echo "======================================"
-          echo "✅ CAP Record Processed Successfully"
-          echo "Repository: ${{ github.repository }}"
-          echo "Schema Version: $SCHEMA_VERSION"
-          jq '.cap_id, .domain, .status, .reasoning_summary' cap_payload.json
-          echo "======================================"
+          echo "✅ CAP record processed and dispatched successfully."
+          jq '.cap_id, .status, .reasoning_summary' cap_payload.json
