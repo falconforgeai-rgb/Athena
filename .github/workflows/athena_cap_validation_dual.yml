@@ -85,6 +85,13 @@ jobs:
           npm install ajv@8 ajv-formats@2
           node validate.js
 
+      - name: 🔐 Compute Ledger Hash
+        run: |
+          echo "🔐 Generating ledger hash for CAP payload..."
+          HASH=$(sha256sum cap_payload.json | awk '{print $1}')
+          jq --arg hash "$HASH" '.ledger_hash = $hash' cap_payload.json > tmp.json && mv tmp.json cap_payload.json
+          echo "✅ Ledger hash added: $HASH"
+
       - name: 🪶 Commit CAP record (if valid)
         run: |
           YEAR=$(date -u +"%Y")
