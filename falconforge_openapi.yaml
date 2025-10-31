@@ -1,0 +1,84 @@
+openapi: 3.1.0
+info:
+  title: FalconForge CAP Validation API
+  version: 1.0.0
+  description: >
+    Secure FalconForge endpoint for validating and logging Athena Compassion Audit Pass (CAP) payloads.
+    Requires HMAC-SHA256 signature header `X-Hub-Signature-256` computed with the shared secret.
+servers:
+  - url: https://dialectical-noninflammably-almeda.ngrok-free.dev
+paths:
+  /v3/cap/log:
+    post:
+      summary: Validate and record CAP payload
+      operationId: postCapPayload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CapPayload"
+      responses:
+        "200":
+          description: CAP successfully verified and logged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapResponse"
+        "401":
+          description: Invalid or missing HMAC signature.
+components:
+  schemas:
+    CapPayload:
+      type: object
+      required:
+        - cap_id
+        - timestamp
+        - domain
+        - context_mode
+        - ems
+        - cw
+        - ad
+        - hci
+        - hs
+      properties:
+        cap_id:
+          type: string
+          description: Unique CAP identifier (UUIDv7).
+        timestamp:
+          type: string
+          format: date-time
+        domain:
+          type: string
+          description: Operational domain (Governance, Sales, Research, etc.)
+        context_mode:
+          type: string
+          enum: [Mythic, Advisor, Sales, Command, Reconnection]
+        ems:
+          type: number
+        cw:
+          type: number
+        ad:
+          type: number
+        hci:
+          type: number
+        hs:
+          type: number
+        body:
+          type: object
+          description: Arbitrary CAP payload content.
+          additionalProperties: true
+    CapResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        verified:
+          type: boolean
+          example: true
+        received:
+          type: boolean
+          example: true
+        body:
+          type: object

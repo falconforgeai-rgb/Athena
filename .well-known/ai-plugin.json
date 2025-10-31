@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "FalconForge CAP Listener",
+  "name_for_model": "falconforge_cap_listener",
+  "description_for_human": "Secure API for validating and logging Athena Compassion Audit Pass (CAP) payloads via HMAC verification.",
+  "description_for_model": "Post Athena CAP payloads for validation and ledger logging through the FalconForge secure listener.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://dialectical-noninflammably-almeda.ngrok-free.dev/falconforge_openapi.yaml"
+  },
+  "logo_url": "https://raw.githubusercontent.com/falconforgeai-rgb/Athena/main/FalconForge_Brand_Seal.png",
+  "contact_email": "support@falconforge.ai",
+  "legal_info_url": "https://falconforge.ai/legal"
+}
