@@ -10,9 +10,9 @@
   "author": "FalconForgeAI Labs",
   "license": "ISC",
   "dependencies": {
+    "dotenv": "^17.2.3",
     "jsonwebtoken": "^9.0.2",
     "node-fetch": "^2.7.0"
   },
-  "type": "module",
-  "devDependencies": {}
+  "type": "module"
 }
