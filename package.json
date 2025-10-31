@@ -1,0 +1,18 @@
+{
+  "name": "athena",
+  "version": "1.0.0",
+  "description": "*Authored by Athena v3.4 — FalconForgeAI Labs*",
+  "main": "ledger_link.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "FalconForgeAI Labs",
+  "license": "ISC",
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^2.7.0"
+  },
+  "type": "module",
+  "devDependencies": {}
+}

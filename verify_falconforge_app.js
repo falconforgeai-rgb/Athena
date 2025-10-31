@@ -14,8 +14,8 @@ import jwt from "jsonwebtoken";   // npm install jsonwebtoken
 import fetch from "node-fetch";   // npm install node-fetch@2
 
 // === CONFIGURE THESE VALUES ===
-const APP_ID = "<YOUR_APP_ID>";                 // e.g., 123456
-const INSTALLATION_ID = "<YOUR_INSTALLATION_ID>"; // e.g., 987654321
+const APP_ID = "2202358";                 // e.g., 123456
+const INSTALLATION_ID = "92329348"; // e.g., 987654321
 const PRIVATE_KEY_PATH = "./falconforge-athena.pem"; // path to your .pem file
 const REPO = "falconforgeai-rgb/Athena";         // full repo name
 
