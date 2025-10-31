@@ -1,0 +1,29 @@
+{
+  "cap_id": "c7e5b290-9434-41cc-92b5-9bca7e78d822",
+  "timestamp": "2025-10-31T02:00:00Z",
+  "domain": "Governance",
+  "context_mode": "Advisor",
+  "ems": 0.84,
+  "cw": 0.23,
+  "ad": 0.17,
+  "hci": 0.82,
+  "hs": 0.90,
+  "haa": 0.93,
+  "er_delta": 0.03,
+  "validator_ethics": "compliant",
+  "validator_empathy": "aligned",
+  "reasoning_summary": "Athena demonstrated proportional ethical balance under advisory conditions, maintaining empathy-weighted coherence with domain governance standards.",
+  "laurie_version": "v3.4",
+  "validator_signatures": {
+    "validator": "athena-core",
+    "signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ethics_signature": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "empathy_signature": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "timestamp": "2025-10-31T02:00:00Z"
+  },
+  "governance_chain": {
+    "hash_prev": "SHA256:0000000000000000000000000000000000000000000000000000000000000000",
+    "hash_next": "SHA256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "status": "pending"
+}
