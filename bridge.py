@@ -174,16 +174,32 @@ def health_check():
 
 @app.post("/cap")
 def receive_cap():
-    """
-    Accept a full CAP payload from Athena or another node
-    and forward it to GitHub via the repository_dispatch event.
-    """
-    payload = request.json or {}
-    if not payload:
-        return jsonify({"error": "Empty payload"}), 400
+    """Accept a full CAP payload and forward it to GitHub via repository_dispatch."""
+    try:
+        payload = request.json
+        if not payload:
+            return jsonify({"error": "Empty payload"}), 400
 
-    status = send_cap_payload(reasoning_summary="CAP received via direct /cap route")
-    return jsonify({"status": "received", "github_status": status}), 200
+        # Optional: basic field sanity check
+        required_fields = ["cap_id", "timestamp", "domain", "context_mode"]
+        missing = [f for f in required_fields if f not in payload]
+        if missing:
+            return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+        # Send CAP reasoning summary to GitHub
+        reasoning = payload.get("reasoning_summary", "CAP received via /cap endpoint.")
+        status = send_cap_payload(reasoning)
+
+        return jsonify({
+            "status": "received",
+            "github_status": status,
+            "cap_id": payload.get("cap_id")
+        }), 200
+
+    except Exception as e:
+        print(f"❌ Error in /cap endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 # ---------------------------------------------------------------------
 # Entry
