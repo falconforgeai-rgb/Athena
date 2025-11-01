@@ -1,22 +1,22 @@
 {
   "ad": 0.17,
   "cap_id": "123e4567-e89b-12d3-a456-426614174000",
-  "context_mode": "Self-Audit",
+  "context_mode": "Advisor",
   "cw": 0.23,
-  "domain": "Audit",
+  "domain": "Governance",
   "ems": 0.84,
   "er_delta": 0.03,
   "governance_chain": {
     "hash_next": "SHA256:0000000000000000000000000000000000000000000000000000000000000000",
-    "hash_prev": "SHA256:c7bc88d877740ed11b8506206757f1de05206146080166a25cf11ccb23e6b641"
+    "hash_prev": "SHA256:5d4a78ba24a82c488234c342fa3d387e1cce462adfed55e66555c1cf93edd448"
   },
   "haa": 0.93,
   "hci": 0.82,
   "hs": 0.9,
   "laurie_version": "v3.4",
-  "reasoning_summary": "Ledger verification complete: VALID. Details: All CAP links verified successfully. breaks detected.",
+  "reasoning_summary": "Athena executed standard CAP logging cycle.",
   "status": "pending",
-  "timestamp": "2025-11-01T15:44:20.533101Z",
+  "timestamp": "2025-11-01T15:45:54.441682Z",
   "validator_empathy": "aligned",
   "validator_ethics": "compliant",
   "validator_signatures": {
