@@ -152,19 +152,38 @@ def verify_chain_integrity():
 @app.post("/wake_listener")
 def wake_listener():
     status = send_cap_payload("Athena executed standard CAP logging cycle.")
-    return jsonify({"github_status": status})
+    return jsonify({"github_status": status}), 200
 
 @app.get("/verify_chain")
 def verify_chain():
+    """Verify local CAP ledger chain and log the result."""
     result = verify_chain_integrity()
-    # Log verification result as a CAP
     reasoning = (
         "Ledger verification complete: "
         f"{result['status'].upper()}. "
         f"Details: {result.get('message') or len(result.get('breaks', []))} breaks detected."
     )
     send_cap_payload(reasoning_summary=reasoning, domain="Audit", context="Self-Audit")
-    return jsonify(result)
+    return jsonify(result), 200
+
+@app.get("/health")
+def health_check():
+    """Basic health check for uptime and ping monitoring."""
+    return jsonify({"status": "ok", "message": "Athena bridge alive"}), 200
+
+
+@app.post("/cap")
+def receive_cap():
+    """
+    Accept a full CAP payload from Athena or another node
+    and forward it to GitHub via the repository_dispatch event.
+    """
+    payload = request.json or {}
+    if not payload:
+        return jsonify({"error": "Empty payload"}), 400
+
+    status = send_cap_payload(reasoning_summary="CAP received via direct /cap route")
+    return jsonify({"status": "received", "github_status": status}), 200
 
 # ---------------------------------------------------------------------
 # Entry
