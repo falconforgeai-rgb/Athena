@@ -1,6 +1,7 @@
 name: Athena CAP Validation & Dual Ledger Dispatch (v3.4 — Adaptive Mode)
 
 on:
+  # ✅ Manual trigger (still works)
   workflow_dispatch:
     inputs:
       cap_payload:
@@ -29,6 +30,10 @@ on:
             "status": "pending"
           }
 
+  # ✅ Automatic trigger from Athena’s bridge
+  repository_dispatch:
+    types: [wake_listener]
+
 permissions:
   contents: write
 
@@ -50,7 +55,7 @@ jobs:
       - name: 🧩 Write CAP payload to file safely
         run: |
           echo "📦 Checking CAP payload type..."
-          echo '${{ inputs.cap_payload }}' > cap_payload_raw.txt
+          echo '${{ inputs.cap_payload || github.event.client_payload.cap_payload || "{}" }}' > cap_payload_raw.txt
           echo "🧩 Raw CAP payload written to cap_payload_raw.txt"
           cat cap_payload_raw.txt
           if ! jq empty cap_payload_raw.txt; then
@@ -63,7 +68,7 @@ jobs:
       - name: 🔍 Debug Schema Header
         run: |
           echo "=== Printing first 10 lines of schema file ($SCHEMA_PATH) ==="
-          head -n 10 $SCHEMA_PATH
+          head -n 10 $SCHEMA_PATH || echo "⚠️ Schema file not found"
 
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
