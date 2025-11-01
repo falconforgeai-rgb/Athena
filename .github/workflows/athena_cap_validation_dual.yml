@@ -55,7 +55,13 @@ jobs:
       - name: 🧩 Write CAP payload to file safely
         run: |
           echo "📦 Checking CAP payload type..."
-          echo '${{ inputs.cap_payload || github.event.client_payload.cap_payload || "{}" }}' > cap_payload_raw.txt
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo '${{ toJson(github.event.client_payload.cap_payload) }}' > cap_payload_raw.txt
+            echo "🔹 CAP payload from repository_dispatch event."
+          else
+            echo '${{ inputs.cap_payload }}' > cap_payload_raw.txt
+            echo "🔹 CAP payload from manual workflow_dispatch input."
+          fi
           echo "🧩 Raw CAP payload written to cap_payload_raw.txt"
           cat cap_payload_raw.txt
           if ! jq empty cap_payload_raw.txt; then
@@ -108,25 +114,7 @@ jobs:
           git config user.name "Athena-Audit-Bot"
           git config user.email "audit-bot@falconforge.ai"
           git add "$FILE"
-          git commit -m "      - name: 🧩 Write CAP payload to file safely
-        run: |
-          echo "📦 Checking CAP payload type..."
-          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            echo '${{ toJson(github.event.client_payload.cap_payload) }}' > cap_payload_raw.txt
-            echo "🔹 CAP payload from repository_dispatch event."
-          else
-            echo '${{ inputs.cap_payload }}' > cap_payload_raw.txt
-            echo "🔹 CAP payload from manual workflow_dispatch input."
-          fi
-          echo "🧩 Raw CAP payload written to cap_payload_raw.txt"
-          cat cap_payload_raw.txt
-          if ! jq empty cap_payload_raw.txt; then
-            echo "❌ Invalid JSON in workflow input."
-            exit 1
-          fi
-          jq . cap_payload_raw.txt > cap_payload.json
-          echo "✅ JSON validated and normalized to cap_payload.json"
-"
+          git commit -m "Add CAP record: ${UUID:-anonymous}"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
           echo "FILE_PATH=$FILE" >> $GITHUB_ENV
 
