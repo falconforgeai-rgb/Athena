@@ -174,28 +174,42 @@ def health_check():
 
 @app.post("/cap")
 def receive_cap():
-    """Accept a full CAP payload and forward it to GitHub via repository_dispatch."""
+    """Accept one or many CAP payloads and forward them to GitHub."""
     try:
-        payload = request.get_json(silent=True)
-        if not payload:
+        data = request.get_json(silent=True)
+        if not data:
             return jsonify({"error": "Empty or invalid JSON payload"}), 400
 
-        required = ["cap_id", "timestamp", "domain", "context_mode"]
-        missing = [f for f in required if f not in payload]
-        if missing:
-            return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+        # Normalize single CAP vs multiple CAPs
+        payloads = data if isinstance(data, list) else [data]
+        results = []
 
-        reasoning = payload.get(
-            "reasoning_summary",
-            "CAP received via /cap endpoint."
-        )
+        for payload in payloads:
+            required = ["cap_id", "timestamp", "domain", "context_mode"]
+            missing = [f for f in required if f not in payload]
+            if missing:
+                results.append({
+                    "cap_id": payload.get("cap_id", "unknown"),
+                    "error": f"Missing fields: {', '.join(missing)}"
+                })
+                continue
 
-        status = send_cap_payload(reasoning)
+            reasoning = payload.get(
+                "reasoning_summary",
+                f"CAP received from domain '{payload.get('domain')}'."
+            )
+            status = send_cap_payload(reasoning)
+
+            results.append({
+                "cap_id": payload.get("cap_id"),
+                "domain": payload.get("domain"),
+                "github_status": status
+            })
 
         return jsonify({
             "status": "received",
-            "github_status": status,
-            "cap_id": payload.get("cap_id")
+            "processed": len(results),
+            "results": results
         }), 200
 
     except Exception as e:
@@ -205,6 +219,7 @@ def receive_cap():
             "error": str(e),
             "traceback": tb
         }), 500
+
 
 @app.get("/status")
 def status():
