@@ -8,7 +8,7 @@
   "er_delta": 0.03,
   "governance_chain": {
     "hash_next": "SHA256:0000000000000000000000000000000000000000000000000000000000000000",
-    "hash_prev": "SHA256:5d4a78ba24a82c488234c342fa3d387e1cce462adfed55e66555c1cf93edd448"
+    "hash_prev": "SHA256:6daf3562609a1bbf1b9628ba8fec3a430553f52f66c52bb82108cf0fb1121abb"
   },
   "haa": 0.93,
   "hci": 0.82,
@@ -16,7 +16,7 @@
   "laurie_version": "v3.4",
   "reasoning_summary": "Athena executed standard CAP logging cycle.",
   "status": "pending",
-  "timestamp": "2025-11-01T15:45:54.441682Z",
+  "timestamp": "2025-11-01T16:26:08.281333Z",
   "validator_empathy": "aligned",
   "validator_ethics": "compliant",
   "validator_signatures": {
