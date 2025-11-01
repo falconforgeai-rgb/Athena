@@ -21,7 +21,7 @@
 },
 "context_mode": {
 "type": "string",
-"enum": ["Mythic", "Advisor", "Sales", "Command", "Reconnection"],
+"enum": ["Mythic", "Advisor", "Sales", "Command", "Reconnection, Self-Audit"],
 "description": "Communication or reasoning tone mode as defined by Athena Canon v3.4."
 },
 "ems": {
