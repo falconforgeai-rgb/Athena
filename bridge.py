@@ -214,7 +214,6 @@ def status():
         "env": os.getenv("RENDER", "local"),
         "timestamp": __import__("datetime").datetime.utcnow().isoformat() + "Z"
     })
-)
 
 # ---------------------------------------------------------------------
 # Entry
