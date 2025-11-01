@@ -206,6 +206,16 @@ def receive_cap():
             "traceback": tb
         }), 500
 
+@app.get("/status")
+def status():
+    return jsonify({
+        "service": "Athena CAP Bridge",
+        "status": "ok",
+        "env": os.getenv("RENDER", "local"),
+        "timestamp": __import__("datetime").datetime.utcnow().isoformat() + "Z"
+    })
+)
+
 # ---------------------------------------------------------------------
 # Entry
 # ---------------------------------------------------------------------
