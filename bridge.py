@@ -4,7 +4,7 @@ import requests
 import hashlib
 from pathlib import Path
 from datetime import datetime
-from flask import Flask, jsonify
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
@@ -176,18 +176,20 @@ def health_check():
 def receive_cap():
     """Accept a full CAP payload and forward it to GitHub via repository_dispatch."""
     try:
-        payload = request.json
+        payload = request.get_json(silent=True)
         if not payload:
-            return jsonify({"error": "Empty payload"}), 400
+            return jsonify({"error": "Empty or invalid JSON payload"}), 400
 
-        # Optional: basic field sanity check
-        required_fields = ["cap_id", "timestamp", "domain", "context_mode"]
-        missing = [f for f in required_fields if f not in payload]
+        required = ["cap_id", "timestamp", "domain", "context_mode"]
+        missing = [f for f in required if f not in payload]
         if missing:
             return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
 
-        # Send CAP reasoning summary to GitHub
-        reasoning = payload.get("reasoning_summary", "CAP received via /cap endpoint.")
+        reasoning = payload.get(
+            "reasoning_summary",
+            "CAP received via /cap endpoint."
+        )
+
         status = send_cap_payload(reasoning)
 
         return jsonify({
@@ -197,9 +199,12 @@ def receive_cap():
         }), 200
 
     except Exception as e:
-        print(f"❌ Error in /cap endpoint: {e}")
-        return jsonify({"error": str(e)}), 500
-
+        tb = traceback.format_exc()
+        print(f"❌ Exception in /cap:\n{tb}")
+        return jsonify({
+            "error": str(e),
+            "traceback": tb
+        }), 500
 
 # ---------------------------------------------------------------------
 # Entry
