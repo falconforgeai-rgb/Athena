@@ -8,15 +8,15 @@
   "er_delta": 0.03,
   "governance_chain": {
     "hash_next": "SHA256:0000000000000000000000000000000000000000000000000000000000000000",
-    "hash_prev": "SHA256:6daf3562609a1bbf1b9628ba8fec3a430553f52f66c52bb82108cf0fb1121abb"
+    "hash_prev": "SHA256:eb707f978ffd5a6851a94b3a727f47f786605f754dc7569ffbe1e7e19c3eccdf"
   },
   "haa": 0.93,
   "hci": 0.82,
   "hs": 0.9,
   "laurie_version": "v3.4",
-  "reasoning_summary": "Athena executed standard CAP logging cycle.",
+  "reasoning_summary": "Test CAP dispatch via live Athena bridge.",
   "status": "pending",
-  "timestamp": "2025-11-01T16:26:08.281333Z",
+  "timestamp": "2025-11-01T16:46:51.078590Z",
   "validator_empathy": "aligned",
   "validator_ethics": "compliant",
   "validator_signatures": {
