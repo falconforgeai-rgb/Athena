@@ -24,3 +24,12 @@ if __name__ == "__main__":
     import os
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
+import requests, os
+
+GITHUB_PAT = os.environ.get("GITHUB_PAT")
+REPO = "falconforgeai-rgb/falconforge-codex"
+FILE = "governance/canon_v3_4_1/FalconForge_Integrity_Manifest_v3.4.1.json"
+
+headers = {"Authorization": f"token {GITHUB_PAT}"}
+url = f"https://api.github.com/repos/{REPO}/contents/{FILE}"
+data = requests.get(url, headers=headers).json()
