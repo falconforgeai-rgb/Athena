@@ -1,3 +1,7 @@
+# render.yaml
+# FalconForgeAI – Athena CAP Bridge v3.4.1
+# Defines the Render infrastructure for the FastAPI CAP ledger bridge
+
 services:
   - type: web
     name: athena-cap-bridge
@@ -6,6 +10,39 @@ services:
     branch: main
     buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn -k uvicorn.workers.UvicornWorker app:app"
+
     envVars:
+      # GitHub token for private canonical data access
       - key: GITHUB_PAT
-        sync: false
+        sync: false   # false = manually set in Render dashboard (keeps it secure)
+
+    autoDeploy: true   # every push to main triggers a deploy
+
+    healthCheckPath: /
+    numInstances: 1
+    region: oregon
+
+    # Optional settings to avoid timeouts on cold starts
+    disk:
+      name: ephemeral
+      mountPath: /tmp
+      sizeGB: 1
+
+    # Basic scaling configuration for free tier
+    scaling:
+      minInstances: 1
+      maxInstances: 1
+
+    # Service metadata for clarity
+    envSpecificConfigs:
+      - env: production
+        name: Athena-cap-bridge
+        healthCheckTimeout: 60
+        startCommand: "gunicorn -k uvicorn.workers.UvicornWorker app:app"
+
+# Optional background worker example (for later CAP sync extensions)
+#  - type: worker
+#    name: cap-ledger-sync
+#    env: python
+#    buildCommand: "pip install -r requirements.txt"
+#    startCommand: "python worker.py"
