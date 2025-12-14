@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: athena-cap-bridge
+    env: python
+    plan: free
+    branch: main
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn -k uvicorn.workers.UvicornWorker app:app"
+    envVars:
+      - key: GITHUB_PAT
+        sync: false
