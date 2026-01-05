@@ -72,27 +72,34 @@ jobs:
       - name: 📘 Install AJV v8 (JSON-Schema 2020-12)
         run: npm install ajv@8 ajv-formats@2 jq
 
-      # 7️⃣.1 Verify schema integrity via manifest
+      # 7️⃣.1 Verify schema integrity via manifest (v3.5 unified structure)
       - name: 🔒 Verify canonical schema integrity (FalconForge Manifest)
         run: |
-          echo "🔍 Verifying schema hash integrity..."
+          echo "🔍 Verifying schema hash integrity (v3.5 unified manifest)..."
+
           if [ ! -f "$INTEGRITY_PATH" ]; then
             echo "❌ Integrity manifest not found at $INTEGRITY_PATH"
             exit 1
           fi
 
+          # Compute live schema hash
           SCHEMA_HASH=$(sha256sum "$SCHEMA_PATH" | awk '{print $1}')
-          EXPECTED_HASH=$(jq -r '.canonical_assets[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' "$INTEGRITY_PATH")
 
-          if [ -z "$EXPECTED_HASH" ]; then
-            echo "❌ Expected hash not found in integrity manifest."
+          # Extract expected hash from 'modules' array
+          EXPECTED_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' "$INTEGRITY_PATH")
+
+          if [ -z "$EXPECTED_HASH" ] || [ "$EXPECTED_HASH" == "null" ]; then
+            echo "❌ Expected hash for ATHENA_CAP_SCHEMA_v3_5.json not found in manifest."
             exit 1
           fi
 
-          echo "Manifest Hash : $EXPECTED_HASH"
+          # Remove 'SHA256:' prefix if present
+          EXPECTED_HASH_CLEAN=$(echo "$EXPECTED_HASH" | sed 's/^SHA256://')
+
+          echo "Manifest Hash : $EXPECTED_HASH_CLEAN"
           echo "Runtime  Hash : $SCHEMA_HASH"
 
-          if [ "$SCHEMA_HASH" != "$EXPECTED_HASH" ]; then
+          if [ "$SCHEMA_HASH" != "$EXPECTED_HASH_CLEAN" ]; then
             echo "❌ Integrity mismatch! Schema differs from manifest record."
             exit 1
           fi
