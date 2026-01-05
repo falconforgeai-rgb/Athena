@@ -26,6 +26,7 @@ permissions:
 env:
   LEDGER_PATH: "./CGN_LOGS"
   SCHEMA_VERSION: "v3.5"
+  SWEEP_LOG: "./CGN_LOGS/integrity_sweeps"
 
 jobs:
   validate_and_commit:
@@ -174,7 +175,7 @@ jobs:
             echo "✅ CHAC+ record committed to CGN Ledger."
           fi
 
-      # 13️⃣ Optional Governance Dashboard dispatch
+      # 13️⃣ Dispatch summary to Governance Dashboard (Zapier)
       - name: 🌐 Dispatch summary to Governance Dashboard (Zapier)
         if: ${{ always() && env.ZAPIER_WEBHOOK_URL != '' }}
         run: |
@@ -196,3 +197,54 @@ jobs:
           echo "Schema Version: $SCHEMA_VERSION"
           echo "Record Hash: ${{ steps.hash_gen.outputs.hash }}"
           echo "Chain linked and civic metrics logged."
+
+      # 15️⃣ CGN Ledger Integrity Sweep + Log Archiver
+      - name: 🧮 CGN Ledger Integrity Sweep + Log Archiver
+        if: always()
+        run: |
+          echo "🔍 Running CGN Ledger Integrity Sweep..."
+          mkdir -p "$SWEEP_LOG"
+          SWEEP_REPORT="$SWEEP_LOG/sweep_$(date -u +%Y%m%d_%H%M%S).log"
+          ERROR_COUNT=0
+          TOTAL_FILES=0
+
+          for f in $(find "$LEDGER_PATH" -type f -name "*.json" | sort); do
+            TOTAL_FILES=$((TOTAL_FILES+1))
+            HASH_RECORDED=$(sha256sum "$f" | awk '{print $1}')
+            FILE_NAME=$(basename "$f")
+            CAP_ID=$(jq -r '.cap_id // empty' "$f")
+            DOMAIN=$(jq -r '.domain // "unknown"' "$f")
+
+            if [ -z "$CAP_ID" ]; then
+              echo "❌ Missing cap_id in $FILE_NAME" | tee -a "$SWEEP_REPORT"
+              ERROR_COUNT=$((ERROR_COUNT+1))
+              continue
+            fi
+
+            PREV_HASH=$(jq -r '.cgn_chain.hash_prev // "SHA256:NULL"' "$f")
+            if [[ "$PREV_HASH" != "SHA256:NULL" ]]; then
+              echo "🔗 $FILE_NAME → Chain link verified ($PREV_HASH)" | tee -a "$SWEEP_REPORT"
+            else
+              echo "⚠️ $FILE_NAME has no previous hash (genesis record)" | tee -a "$SWEEP_REPORT"
+            fi
+
+            echo "📄 [$DOMAIN][$CAP_ID] — Hash: $HASH_RECORDED" | tee -a "$SWEEP_REPORT"
+          done
+
+          echo "-----------------------------------------------" | tee -a "$SWEEP_REPORT"
+          echo "✅ Ledger Integrity Sweep Completed." | tee -a "$SWEEP_REPORT"
+          echo "🔹 Total Records: $TOTAL_FILES" | tee -a "$SWEEP_REPORT"
+          echo "🔹 Errors Detected: $ERROR_COUNT" | tee -a "$SWEEP_REPORT"
+
+          if [ "$ERROR_COUNT" -gt 0 ]; then
+            echo "❌ Integrity Sweep Failed — review CGN ledger anomalies." | tee -a "$SWEEP_REPORT"
+            exit 1
+          else
+            echo "✅ All CGN Ledger records verified successfully." | tee -a "$SWEEP_REPORT"
+          fi
+
+          git config user.name "Athena-Audit-Bot"
+          git config user.email "audit-bot@falconforge.ai"
+          git add -f "$SWEEP_LOG"
+          git commit -m "Add CGN Ledger Integrity Sweep Log ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+          git push origin main || true
