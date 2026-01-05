@@ -33,25 +33,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout this repo (Athena)
       - name: 🧭 Checkout Athena repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Checkout canonical repo (falconforge-codex)
       - name: 🧭 Checkout falconforge-codex canonical repository
         uses: actions/checkout@v4
         with:
           repository: falconforgeai-rgb/falconforge-codex
           path: codex
-          token: ${{ secrets.GH_PAT }}   # must have read access to codex
+          token: ${{ secrets.GH_PAT }}
 
-      # 3️⃣ Define canonical schema path dynamically
       - name: 🔧 Define schema path
         run: |
           echo "SCHEMA_PATH=./codex/falconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json" >> $GITHUB_ENV
           echo "INTEGRITY_PATH=./codex/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json" >> $GITHUB_ENV
 
-      # 4️⃣ Normalize CAP payload input
       - name: 🧩 Capture CAP payload
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
@@ -62,17 +58,14 @@ jobs:
           jq . cap_payload_raw.json > cap_payload.json
           echo "✅ CAP payload normalized."
 
-      # 5️⃣ Setup Node.js
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # 6️⃣ Install validator libs
       - name: 📘 Install AJV v8 (JSON-Schema 2020-12)
         run: npm install ajv@8 ajv-formats@2
 
-      # 7️⃣ Validate CAP JSON
       - name: 🧠 Validate CAP JSON (Athena v3.5)
         run: |
           node - <<'EOF'
@@ -93,7 +86,6 @@ jobs:
           }
           EOF
 
-      # 8️⃣ Generate filename + hash
       - name: 🔒 Generate canonical filename + SHA256
         id: hash_gen
         run: |
@@ -109,7 +101,6 @@ jobs:
           echo "hash=$SHA256" >> $GITHUB_OUTPUT
           echo "Generated SHA256: $SHA256"
 
-      # 9️⃣ Link previous CGN hash
       - name: 🪶 Link CGN chain (previous hash)
         run: |
           LAST_FILE=$(find "$LEDGER_PATH" -type f -name "*.json" | sort | tail -n 1 || true)
@@ -117,25 +108,20 @@ jobs:
           jq --arg prev "$PREV_HASH" '.cgn_chain.hash_prev = $prev' cap_payload.json > tmp && mv tmp cap_payload.json
           echo "Linked previous CGN hash: $PREV_HASH"
 
-      # 🔟 Verify tri-signature
-     - name: Verify tri-signature presence (Ethics, Empathy, Civic)
-       run: |
-         ETHICS=$(jq -r '.meta.validators.ethics // empty' cap_payload.json)
-         EMPATHY=$(jq -r '.meta.validators.empathy // empty' cap_payload.json)
-         CIVIC=$(jq -r '.meta.validators.civic // empty' cap_payload.json)
+      - name: 🔏 Verify tri-signature presence (Ethics, Empathy, Civic)
+        run: |
+          ETHICS=$(jq -r '.meta.validators.ethics // empty' cap_payload.json)
+          EMPATHY=$(jq -r '.meta.validators.empathy // empty' cap_payload.json)
+          CIVIC=$(jq -r '.meta.validators.civic // empty' cap_payload.json)
+          if [ -z "$ETHICS" ] || [ -z "$EMPATHY" ] || [ -z "$CIVIC" ]; then
+            echo "❌ Missing validator signature(s)"
+            echo "validator_ethics: ${ETHICS:-MISSING}"
+            echo "validator_empathy: ${EMPATHY:-MISSING}"
+            echo "validator_civic: ${CIVIC:-MISSING}"
+            exit 1
+          fi
+          echo "✅ All validator tri-signatures present."
 
-         if [ -z "$ETHICS" ] || [ -z "$EMPATHY" ] || [ -z "$CIVIC" ]; then
-           echo "❌ Missing validator signature(s)"
-           echo "validator_ethics: ${ETHICS:-MISSING}"
-           echo "validator_empathy: ${EMPATHY:-MISSING}"
-           echo "validator_civic: ${CIVIC:-MISSING}"
-           exit 1
-         fi
-
-         echo "✅ All validator tri-signatures present."
-
-
-      # 11️⃣ Commit to CGN ledger
       - name: 🧬 Commit CHAC+ record to CGN Ledger
         run: |
           FILE="${{ steps.hash_gen.outputs.file }}"
@@ -146,7 +132,6 @@ jobs:
           git commit -m "Add CHAC+ record: ${{ github.event.client_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}] (v3.5)"
           git push
 
-      # 12️⃣ Optional dashboard post
       - name: 🌐 Dispatch summary to Governance Dashboard (Zapier)
         if: ${{ always() && env.ZAPIER_WEBHOOK_URL != '' }}
         run: |
@@ -161,7 +146,6 @@ jobs:
             '{cap_id:$cap_id, domain:$domain, status:$status, cri:$cri, cei:$cei, summary:$summary, schema_version:$schema_version}')
           curl -sS -X POST "$ZAPIER_WEBHOOK_URL" -H "Content-Type: application/json" -d "$SUMMARY" || true
 
-      # 13️⃣ Output summary
       - name: 🧩 Output verification summary
         run: |
           echo "✅ CAP Record committed to CGN Ledger."
