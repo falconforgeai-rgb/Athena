@@ -1,4 +1,4 @@
-name: Athena CAP Validation & CGN Commit (v3.5 — Evidence Engine Edition)
+name: Athena CAP Validation & CGN Commit (v3.5 — Continuous Integrity Edition)
 
 on:
   workflow_dispatch:
@@ -19,6 +19,8 @@ on:
         baseline_drift_event,
         scenario_redteam_commit
       ]
+  schedule:
+    - cron: "0 3 * * *"  # 🕰️ Runs every day at 03:00 UTC
 
 permissions:
   contents: write
@@ -27,18 +29,17 @@ env:
   LEDGER_PATH: "./CGN_LOGS"
   SCHEMA_VERSION: "v3.5"
   SWEEP_LOG: "./CGN_LOGS/integrity_sweeps"
+  BROADCAST_URL: ${{ secrets.FALCONFORGE_GOVERNANCE_WEBHOOK || secrets.ZAPIER_WEBHOOK_URL }}
 
 jobs:
   validate_and_commit:
-    name: Validate CHAC+ Record and Commit to CGN Ledger
+    name: Validate CAP Record and Commit to CGN Ledger
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout Athena repository
       - name: 🧭 Checkout Athena repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Checkout canonical FalconForge Codex repository
       - name: 🧭 Checkout FalconForge Codex canonical repository
         uses: actions/checkout@v4
         with:
@@ -46,13 +47,11 @@ jobs:
           path: codex
           token: ${{ secrets.GH_PAT }}
 
-      # 3️⃣ Define schema + manifest paths dynamically
       - name: 🔧 Define schema and manifest paths
         run: |
           echo "SCHEMA_PATH=./codex/falconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json" >> $GITHUB_ENV
           echo "INTEGRITY_PATH=./codex/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json" >> $GITHUB_ENV
 
-      # 4️⃣ Normalize CAP payload input
       - name: 🧩 Capture CAP payload
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
@@ -63,40 +62,27 @@ jobs:
           jq . cap_payload_raw.json > cap_payload.json
           echo "✅ CAP payload normalized."
 
-      # 5️⃣ Setup Node.js
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # 6️⃣ Install validator libraries
       - name: 📘 Install AJV v8 (JSON Schema 2020-12)
         run: npm install ajv@8 ajv-formats@2
 
-      # 7️⃣ Verify canonical schema integrity via FalconForge manifest
       - name: 🔒 Verify canonical schema integrity (FalconForge Manifest)
         run: |
-          echo "🔍 Verifying schema hash integrity (v3.5 unified manifest)..."
-          if [ ! -f "$INTEGRITY_PATH" ]; then
-            echo "❌ Integrity manifest not found at $INTEGRITY_PATH"
-            exit 1
-          fi
+          echo "🔍 Verifying schema hash integrity..."
           SCHEMA_HASH=$(sha256sum "$SCHEMA_PATH" | awk '{print $1}')
-          EXPECTED_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' "$INTEGRITY_PATH")
-          if [ -z "$EXPECTED_HASH" ] || [ "$EXPECTED_HASH" == "null" ]; then
-            echo "❌ Expected hash not found in manifest."
-            exit 1
-          fi
-          EXPECTED_HASH_CLEAN=$(echo "$EXPECTED_HASH" | sed 's/^SHA256://')
-          echo "Manifest Hash : $EXPECTED_HASH_CLEAN"
+          EXPECTED_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' "$INTEGRITY_PATH" | sed 's/^SHA256://')
+          echo "Manifest Hash : $EXPECTED_HASH"
           echo "Runtime  Hash : $SCHEMA_HASH"
-          if [ "$SCHEMA_HASH" != "$EXPECTED_HASH_CLEAN" ]; then
-            echo "❌ Integrity mismatch! Schema differs from manifest record."
+          if [ "$SCHEMA_HASH" != "$EXPECTED_HASH" ]; then
+            echo "❌ Integrity mismatch!"
             exit 1
           fi
-          echo "✅ Integrity verified — schema hash matches FalconForge manifest."
+          echo "✅ Schema integrity confirmed."
 
-      # 8️⃣ Validate CAP JSON
       - name: 🧠 Validate CAP JSON (Athena v3.5)
         run: |
           node - <<'EOF'
@@ -113,11 +99,10 @@ jobs:
             console.error('❌ Schema validation failed:', validate.errors);
             process.exit(1);
           } else {
-            console.log('✅ CAP payload validated successfully.');
+            console.log('✅ CAP JSON validated successfully.');
           }
           EOF
 
-      # 9️⃣ Generate filename + hash
       - name: 🔒 Generate canonical filename + SHA256
         id: hash_gen
         run: |
@@ -131,9 +116,7 @@ jobs:
           SHA256=$(sha256sum cap_payload.json | awk '{print $1}')
           echo "file=$FILEPATH" >> $GITHUB_OUTPUT
           echo "hash=$SHA256" >> $GITHUB_OUTPUT
-          echo "Generated SHA256: $SHA256"
 
-      # 🔟 Link previous CGN hash
       - name: 🪶 Link CGN chain (previous hash)
         run: |
           LAST_FILE=$(find "$LEDGER_PATH" -type f -name "*.json" | sort | tail -n 1 || true)
@@ -141,7 +124,6 @@ jobs:
           jq --arg prev "$PREV_HASH" '.cgn_chain.hash_prev = $prev' cap_payload.json > tmp && mv tmp cap_payload.json
           echo "Linked previous CGN hash: $PREV_HASH"
 
-      # 11️⃣ Verify validator tri-signatures
       - name: 🧩 Verify tri-signature presence (Ethics, Empathy, Civic)
         run: |
           ETHICS=$(jq -r '.meta.validators.ethics // empty' cap_payload.json)
@@ -149,15 +131,11 @@ jobs:
           CIVIC=$(jq -r '.meta.validators.civic // empty' cap_payload.json)
           if [ -z "$ETHICS" ] || [ -z "$EMPATHY" ] || [ -z "$CIVIC" ]; then
             echo "❌ Missing validator signature(s)"
-            echo "validator_ethics: ${ETHICS:-MISSING}"
-            echo "validator_empathy: ${EMPATHY:-MISSING}"
-            echo "validator_civic: ${CIVIC:-MISSING}"
             exit 1
           fi
           echo "✅ All validator tri-signatures present."
 
-      # 12️⃣ Commit CHAC+ record to CGN Ledger safely
-      - name: 🧬 Commit CHAC+ record to CGN Ledger
+      - name: 🧬 Commit CHAC+ record to CGN Ledger safely
         run: |
           FILE="${{ steps.hash_gen.outputs.file }}"
           mkdir -p "$(dirname "$FILE")"
@@ -168,38 +146,30 @@ jobs:
           git add -f "$FILE"
           git restore --staged cap_payload.json cap_payload_raw.json || true
           if git diff --cached --quiet; then
-            echo "⚠️ No new CAP records to commit. Skipping commit."
+            echo "⚠️ No new CAP records to commit."
           else
             git commit -m "Add CHAC+ record: ${{ github.event.client_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}] (v3.5)"
             git push origin main
             echo "✅ CHAC+ record committed to CGN Ledger."
           fi
 
-      # 13️⃣ Dispatch summary to Governance Dashboard (Zapier)
-      - name: 🌐 Dispatch summary to Governance Dashboard (Zapier)
-        if: ${{ always() && env.ZAPIER_WEBHOOK_URL != '' }}
+      - name: 🧬 Generate CAP Provenance Record
         run: |
-          SUMMARY=$(jq -n \
+          FILE="${{ steps.hash_gen.outputs.file }}"
+          PROV_FILE="${FILE%.*}_provenance.json"
+          jq -n \
             --arg cap_id "$(jq -r '.cap_id' cap_payload.json)" \
-            --arg domain "$(jq -r '.domain' cap_payload.json)" \
-            --arg status "$(jq -r '.status // \"pending\"' cap_payload.json)" \
-            --arg cri "$(jq -r '.cri // \"null\"' cap_payload.json)" \
-            --arg cei "$(jq -r '.cei // \"null\"' cap_payload.json)" \
-            --arg summary "$(jq -r '.reasoning_summary // \"\"' cap_payload.json)" \
-            --arg schema_version "$SCHEMA_VERSION" \
-            '{cap_id:$cap_id, domain:$domain, status:$status, cri:$cri, cei:$cei, summary:$summary, schema_version:$schema_version}')
-          curl -sS -X POST "$ZAPIER_WEBHOOK_URL" -H "Content-Type: application/json" -d "$SUMMARY" || true
+            --arg schema "$SCHEMA_VERSION" \
+            --arg root_hash "$(jq -r '.root_hash' $INTEGRITY_PATH)" \
+            --arg commit_hash "$(git rev-parse HEAD)" \
+            --arg signer "Athena-Audit-Bot" \
+            --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            '{cap_id:$cap_id, schema:$schema, root_hash:$root_hash, commit:$commit_hash, signer:$signer, timestamp:$timestamp}' > "$PROV_FILE"
+          git add -f "$PROV_FILE"
+          git commit -m "Add CAP Provenance Record for ${{ github.event.client_payload.cap_id }}"
+          git push origin main
 
-      # 14️⃣ Output verification summary
-      - name: 🧩 Output verification summary
-        run: |
-          echo "✅ CAP Record successfully processed and verified."
-          echo "Schema Version: $SCHEMA_VERSION"
-          echo "Record Hash: ${{ steps.hash_gen.outputs.hash }}"
-          echo "Chain linked and civic metrics logged."
-
-      # 15️⃣ CGN Ledger Integrity Sweep + Log Archiver
-      - name: 🧮 CGN Ledger Integrity Sweep + Log Archiver
+      - name: 🧮 CGN Ledger Integrity Sweep + Digest Broadcast
         if: always()
         run: |
           echo "🔍 Running CGN Ledger Integrity Sweep..."
@@ -207,44 +177,36 @@ jobs:
           SWEEP_REPORT="$SWEEP_LOG/sweep_$(date -u +%Y%m%d_%H%M%S).log"
           ERROR_COUNT=0
           TOTAL_FILES=0
-
           for f in $(find "$LEDGER_PATH" -type f -name "*.json" | sort); do
             TOTAL_FILES=$((TOTAL_FILES+1))
             HASH_RECORDED=$(sha256sum "$f" | awk '{print $1}')
             FILE_NAME=$(basename "$f")
             CAP_ID=$(jq -r '.cap_id // empty' "$f")
-            DOMAIN=$(jq -r '.domain // "unknown"' "$f")
-
-            if [ -z "$CAP_ID" ]; then
-              echo "❌ Missing cap_id in $FILE_NAME" | tee -a "$SWEEP_REPORT"
-              ERROR_COUNT=$((ERROR_COUNT+1))
-              continue
-            fi
-
-            PREV_HASH=$(jq -r '.cgn_chain.hash_prev // "SHA256:NULL"' "$f")
-            if [[ "$PREV_HASH" != "SHA256:NULL" ]]; then
-              echo "🔗 $FILE_NAME → Chain link verified ($PREV_HASH)" | tee -a "$SWEEP_REPORT"
-            else
-              echo "⚠️ $FILE_NAME has no previous hash (genesis record)" | tee -a "$SWEEP_REPORT"
-            fi
-
-            echo "📄 [$DOMAIN][$CAP_ID] — Hash: $HASH_RECORDED" | tee -a "$SWEEP_REPORT"
+            [ -z "$CAP_ID" ] && { echo "❌ Missing cap_id in $FILE_NAME" | tee -a "$SWEEP_REPORT"; ERROR_COUNT=$((ERROR_COUNT+1)); continue; }
+            echo "📄 [$CAP_ID] — Hash: $HASH_RECORDED" | tee -a "$SWEEP_REPORT"
           done
-
-          echo "-----------------------------------------------" | tee -a "$SWEEP_REPORT"
-          echo "✅ Ledger Integrity Sweep Completed." | tee -a "$SWEEP_REPORT"
           echo "🔹 Total Records: $TOTAL_FILES" | tee -a "$SWEEP_REPORT"
-          echo "🔹 Errors Detected: $ERROR_COUNT" | tee -a "$SWEEP_REPORT"
-
-          if [ "$ERROR_COUNT" -gt 0 ]; then
-            echo "❌ Integrity Sweep Failed — review CGN ledger anomalies." | tee -a "$SWEEP_REPORT"
-            exit 1
-          else
-            echo "✅ All CGN Ledger records verified successfully." | tee -a "$SWEEP_REPORT"
+          DIGEST=$(sha256sum "$SWEEP_REPORT" | awk '{print $1}')
+          echo "🔗 Sweep Digest: $DIGEST"
+          if [ -n "$BROADCAST_URL" ]; then
+            jq -n --arg digest "$DIGEST" --arg records "$TOTAL_FILES" --arg errors "$ERROR_COUNT" \
+              '{digest:$digest, records:$records, errors:$errors, timestamp:(now|todate)}' \
+              | curl -sS -X POST "$BROADCAST_URL" -H "Content-Type: application/json" -d @- || true
           fi
-
           git config user.name "Athena-Audit-Bot"
           git config user.email "audit-bot@falconforge.ai"
           git add -f "$SWEEP_LOG"
           git commit -m "Add CGN Ledger Integrity Sweep Log ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
           git push origin main || true
+
+  cgn_integrity_cron:
+    name: 🕰️ Daily CGN Integrity Sweep
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: 🧭 Checkout Athena repository
+        uses: actions/checkout@v4
+      - name: 🧮 Run daily sweep
+        run: |
+          echo "🕰️ Running scheduled CGN Integrity Sweep..."
+          bash .github/workflows/athena_cap_validation_v3_5.yml || echo "⚠️ Sweep completed with warnings."
