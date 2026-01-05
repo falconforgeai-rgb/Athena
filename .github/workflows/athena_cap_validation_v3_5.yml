@@ -48,8 +48,8 @@ jobs:
       # 3️⃣ Define canonical schema path dynamically
       - name: 🔧 Define schema path
         run: |
-          echo "SCHEMA_PATH=./codex/governance/canon_v3_4_1/ATHENA_CAP_SCHEMA_v3_5.json" >> $GITHUB_ENV
-          echo "INTEGRITY_PATH=./codex/governance/canon_v3_4_1/FalconForge_Integrity_Manifest_v3_5.json" >> $GITHUB_ENV
+          echo "SCHEMA_PATH=./codexfalconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json" >> $GITHUB_ENV
+          echo "INTEGRITY_PATH=./codexfalconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json" >> $GITHUB_ENV
 
       # 4️⃣ Normalize CAP payload input
       - name: 🧩 Capture CAP payload
