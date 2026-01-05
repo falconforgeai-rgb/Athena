@@ -1,0 +1,152 @@
+name: Athena CAP Validation & CGN Commit (v3.5 — Evidence Engine Edition)
+
+on:
+  workflow_dispatch:
+    inputs:
+      cap_payload:
+        description: "Paste CAP JSON (v3.5-compliant)"
+        required: true
+  repository_dispatch:
+    types:
+      [
+        cap_validation,
+        hic_validation,
+        humanization_pass,
+        civic_validation,
+        decision_trace_commit,
+        risk_economics_commit,
+        evidence_pack_release,
+        baseline_drift_event,
+        scenario_redteam_commit
+      ]
+
+permissions:
+  contents: write
+
+env:
+  SCHEMA_PATH: "./canonical/ATHENA_CAP_SCHEMA_v3_5.json"
+  LEDGER_PATH: "./CGN_LOGS"
+  SCHEMA_VERSION: "v3.5"
+
+jobs:
+  validate_and_commit:
+    name: Validate CHAC+ Record and Commit to CGN Ledger
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧭 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🧱 Ensure canonical structure
+        run: |
+          if [ ! -f "$SCHEMA_PATH" ]; then
+            echo "❌ Schema not found at $SCHEMA_PATH"
+            echo "Expected canonical layout under ./canonical/"
+            exit 1
+          fi
+          mkdir -p "$LEDGER_PATH"
+
+      - name: 🧩 Capture CAP payload
+        run: |
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo '${{ toJson(github.event.client_payload) }}' > cap_payload_raw.json
+          else
+            echo '${{ inputs.cap_payload }}' > cap_payload_raw.json
+          fi
+          jq . cap_payload_raw.json > cap_payload.json
+          echo "✅ CAP payload normalized."
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 📘 Install AJV v8 (2020-12 draft)
+        run: npm install ajv@8 ajv-formats@2
+
+      - name: 🧠 Validate CAP JSON (Athena CAP Schema v3.5)
+        run: |
+          node - <<'EOF'
+          import fs from 'fs';
+          import Ajv2020 from 'ajv/dist/2020.js';
+          import addFormats from 'ajv-formats';
+          const ajv = new Ajv2020({ strict: false, allErrors: true });
+          addFormats(ajv);
+          const schema = JSON.parse(fs.readFileSync(process.env.SCHEMA_PATH));
+          const data = JSON.parse(fs.readFileSync('cap_payload.json'));
+          const validate = ajv.compile(schema);
+          const valid = validate(data);
+          if (!valid) {
+            console.error('❌ Schema validation failed:', validate.errors);
+            process.exit(1);
+          } else {
+            console.log('✅ CAP payload validated successfully.');
+          }
+          EOF
+
+      - name: 🔒 Generate canonical filename + SHA256 hash
+        id: hash_gen
+        run: |
+          CAP_ID=$(jq -r '.cap_id // empty' cap_payload.json)
+          DOMAIN=$(jq -r '.domain // "unknown"' cap_payload.json | tr '[:upper:]' '[:lower:]')
+          YEAR=$(date -u +"%Y")
+          MONTH=$(date -u +"%m")
+
+          [ -z "$CAP_ID" ] && { echo "❌ cap_id missing"; exit 1; }
+
+          FILEPATH="$LEDGER_PATH/$YEAR/$MONTH/${DOMAIN}_${CAP_ID}.json"
+          mkdir -p "$(dirname "$FILEPATH")"
+          SHA256=$(sha256sum cap_payload.json | awk '{print $1}')
+
+          echo "file=$FILEPATH" >> $GITHUB_OUTPUT
+          echo "hash=$SHA256" >> $GITHUB_OUTPUT
+          echo "Generated SHA256: $SHA256"
+
+      - name: 🪶 Link CGN chain (previous hash)
+        run: |
+          LAST_FILE=$(find "$LEDGER_PATH" -type f -name "*.json" | sort | tail -n 1 || true)
+          PREV_HASH=$(grep -m1 -o 'SHA256:[A-Fa-f0-9]\{64\}' "$LAST_FILE" | head -n 1 || echo "SHA256:NULL")
+          jq --arg prev "$PREV_HASH" '.cgn_chain.hash_prev = $prev' cap_payload.json > tmp && mv tmp cap_payload.json
+          echo "Linked previous CGN hash: $PREV_HASH"
+
+      - name: 🧾 Verify validator tri-signature (Ethics, Empathy, Civic)
+        run: |
+          for key in validator_ethics validator_empathy validator_civic; do
+            if [ -z "$(jq -r ".${key} // empty" cap_payload.json)" ]; then
+              echo "❌ Missing validator signature: $key"
+              exit 1
+            fi
+          done
+          echo "✅ All validator signatures present."
+
+      - name: 🧬 Commit CHAC+ record to CGN Ledger
+        run: |
+          FILE="${{ steps.hash_gen.outputs.file }}"
+          cp cap_payload.json "$FILE"
+
+          git config user.name "Athena-Audit-Bot"
+          git config user.email "audit-bot@falconforge.ai"
+          git add "$FILE"
+          git commit -m "Add CHAC+ record: ${{ github.event.client_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}] (v3.5)"
+          git push
+
+      - name: 🌐 Dispatch summary to Governance Dashboard (Zapier)
+        if: ${{ always() && env.ZAPIER_WEBHOOK_URL != '' }}
+        run: |
+          SUMMARY=$(jq -n \
+            --arg cap_id "$(jq -r '.cap_id' cap_payload.json)" \
+            --arg domain "$(jq -r '.domain' cap_payload.json)" \
+            --arg status "$(jq -r '.status // "pending"' cap_payload.json)" \
+            --arg cri "$(jq -r '.cri // "null"' cap_payload.json)" \
+            --arg cei "$(jq -r '.cei // "null"' cap_payload.json)" \
+            --arg summary "$(jq -r '.reasoning_summary // ""' cap_payload.json)" \
+            --arg schema_version "$SCHEMA_VERSION" \
+            '{cap_id:$cap_id, domain:$domain, status:$status, cri:$cri, cei:$cei, summary:$summary, schema_version:$schema_version}')
+          curl -sS -X POST "$ZAPIER_WEBHOOK_URL" -H "Content-Type: application/json" -d "$SUMMARY" || true
+
+      - name: 🧩 Output verification summary
+        run: |
+          echo "✅ CAP Record committed to CGN Ledger."
+          echo "Schema Version: $SCHEMA_VERSION"
+          echo "Record Hash: ${{ steps.hash_gen.outputs.hash }}"
+          echo "Chain linked and civic metrics logged."
