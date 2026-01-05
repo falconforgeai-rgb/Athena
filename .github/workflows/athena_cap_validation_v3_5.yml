@@ -118,14 +118,22 @@ jobs:
           echo "Linked previous CGN hash: $PREV_HASH"
 
       # 🔟 Verify tri-signature
-      - name: 🧾 Verify validator tri-signature
-        run: |
-          for key in validator_ethics validator_empathy validator_civic; do
-            if [ -z "$(jq -r ".${key} // empty" cap_payload.json)" ]; then
-              echo "❌ Missing validator signature: $key"; exit 1;
-            fi;
-          done;
-          echo "✅ All validator signatures present."
+     - name: Verify tri-signature presence (Ethics, Empathy, Civic)
+       run: |
+         ETHICS=$(jq -r '.meta.validators.ethics // empty' cap_payload.json)
+         EMPATHY=$(jq -r '.meta.validators.empathy // empty' cap_payload.json)
+         CIVIC=$(jq -r '.meta.validators.civic // empty' cap_payload.json)
+
+         if [ -z "$ETHICS" ] || [ -z "$EMPATHY" ] || [ -z "$CIVIC" ]; then
+           echo "❌ Missing validator signature(s)"
+           echo "validator_ethics: ${ETHICS:-MISSING}"
+           echo "validator_empathy: ${EMPATHY:-MISSING}"
+           echo "validator_civic: ${CIVIC:-MISSING}"
+           exit 1
+         fi
+
+         echo "✅ All validator tri-signatures present."
+
 
       # 11️⃣ Commit to CGN ledger
       - name: 🧬 Commit CHAC+ record to CGN Ledger
