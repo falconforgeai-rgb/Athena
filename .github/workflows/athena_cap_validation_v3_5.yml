@@ -33,20 +33,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout this repo (Athena)
+      # 1️⃣ Checkout Athena repository
       - name: 🧭 Checkout Athena repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Checkout canonical repository (falconforge-codex)
-      - name: 🧭 Checkout FalconForge-Codex repository
+      # 2️⃣ Checkout canonical FalconForge Codex repository
+      - name: 🧭 Checkout FalconForge Codex canonical repository
         uses: actions/checkout@v4
         with:
           repository: falconforgeai-rgb/falconforge-codex
           path: codex
           token: ${{ secrets.GH_PAT }}
 
-      # 3️⃣ Define canonical schema and manifest paths
-      - name: 🔧 Define schema path
+      # 3️⃣ Define schema + manifest paths dynamically
+      - name: 🔧 Define schema and manifest paths
         run: |
           echo "SCHEMA_PATH=./codex/falconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json" >> $GITHUB_ENV
           echo "INTEGRITY_PATH=./codex/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json" >> $GITHUB_ENV
@@ -68,45 +68,34 @@ jobs:
         with:
           node-version: "20"
 
-      # 6️⃣ Install AJV validator
-      - name: 📘 Install AJV v8 (JSON-Schema 2020-12)
-        run: npm install ajv@8 ajv-formats@2 jq
+      # 6️⃣ Install validator libraries
+      - name: 📘 Install AJV v8 (JSON Schema 2020-12)
+        run: npm install ajv@8 ajv-formats@2
 
-      # 7️⃣.1 Verify schema integrity via manifest (v3.5 unified structure)
+      # 7️⃣ Verify canonical schema integrity via FalconForge manifest
       - name: 🔒 Verify canonical schema integrity (FalconForge Manifest)
         run: |
           echo "🔍 Verifying schema hash integrity (v3.5 unified manifest)..."
-
           if [ ! -f "$INTEGRITY_PATH" ]; then
             echo "❌ Integrity manifest not found at $INTEGRITY_PATH"
             exit 1
           fi
-
-          # Compute live schema hash
           SCHEMA_HASH=$(sha256sum "$SCHEMA_PATH" | awk '{print $1}')
-
-          # Extract expected hash from 'modules' array
           EXPECTED_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' "$INTEGRITY_PATH")
-
           if [ -z "$EXPECTED_HASH" ] || [ "$EXPECTED_HASH" == "null" ]; then
-            echo "❌ Expected hash for ATHENA_CAP_SCHEMA_v3_5.json not found in manifest."
+            echo "❌ Expected hash not found in manifest."
             exit 1
           fi
-
-          # Remove 'SHA256:' prefix if present
           EXPECTED_HASH_CLEAN=$(echo "$EXPECTED_HASH" | sed 's/^SHA256://')
-
           echo "Manifest Hash : $EXPECTED_HASH_CLEAN"
           echo "Runtime  Hash : $SCHEMA_HASH"
-
           if [ "$SCHEMA_HASH" != "$EXPECTED_HASH_CLEAN" ]; then
             echo "❌ Integrity mismatch! Schema differs from manifest record."
             exit 1
           fi
-
           echo "✅ Integrity verified — schema hash matches FalconForge manifest."
 
-      # 8️⃣ Validate CAP JSON structure
+      # 8️⃣ Validate CAP JSON
       - name: 🧠 Validate CAP JSON (Athena v3.5)
         run: |
           node - <<'EOF'
@@ -127,7 +116,7 @@ jobs:
           }
           EOF
 
-      # 9️⃣ Generate canonical filename + SHA256
+      # 9️⃣ Generate filename + hash
       - name: 🔒 Generate canonical filename + SHA256
         id: hash_gen
         run: |
@@ -151,8 +140,8 @@ jobs:
           jq --arg prev "$PREV_HASH" '.cgn_chain.hash_prev = $prev' cap_payload.json > tmp && mv tmp cap_payload.json
           echo "Linked previous CGN hash: $PREV_HASH"
 
-      # 11️⃣ Verify tri-signature presence
-      - name: 🔏 Verify tri-signature presence (Ethics, Empathy, Civic)
+      # 11️⃣ Verify validator tri-signatures
+      - name: 🧩 Verify tri-signature presence (Ethics, Empathy, Civic)
         run: |
           ETHICS=$(jq -r '.meta.validators.ethics // empty' cap_payload.json)
           EMPATHY=$(jq -r '.meta.validators.empathy // empty' cap_payload.json)
@@ -166,18 +155,26 @@ jobs:
           fi
           echo "✅ All validator tri-signatures present."
 
-      # 12️⃣ Commit validated CAP record to CGN Ledger
+      # 12️⃣ Commit CHAC+ record to CGN Ledger safely
       - name: 🧬 Commit CHAC+ record to CGN Ledger
         run: |
           FILE="${{ steps.hash_gen.outputs.file }}"
+          mkdir -p "$(dirname "$FILE")"
           cp cap_payload.json "$FILE"
+          echo "🔹 Preparing commit for file: $FILE"
           git config user.name "Athena-Audit-Bot"
           git config user.email "audit-bot@falconforge.ai"
-          git add "$FILE"
-          git commit -m "Add CHAC+ record: ${{ github.event.client_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}] (v3.5)"
-          git push
+          git add -f "$FILE"
+          git restore --staged cap_payload.json cap_payload_raw.json || true
+          if git diff --cached --quiet; then
+            echo "⚠️ No new CAP records to commit. Skipping commit."
+          else
+            git commit -m "Add CHAC+ record: ${{ github.event.client_payload.cap_id }} [${{ steps.hash_gen.outputs.hash }}] (v3.5)"
+            git push origin main
+            echo "✅ CHAC+ record committed to CGN Ledger."
+          fi
 
-      # 13️⃣ Optional dashboard dispatch
+      # 13️⃣ Optional Governance Dashboard dispatch
       - name: 🌐 Dispatch summary to Governance Dashboard (Zapier)
         if: ${{ always() && env.ZAPIER_WEBHOOK_URL != '' }}
         run: |
@@ -195,7 +192,7 @@ jobs:
       # 14️⃣ Output verification summary
       - name: 🧩 Output verification summary
         run: |
-          echo "✅ CAP Record committed to CGN Ledger."
+          echo "✅ CAP Record successfully processed and verified."
           echo "Schema Version: $SCHEMA_VERSION"
           echo "Record Hash: ${{ steps.hash_gen.outputs.hash }}"
           echo "Chain linked and civic metrics logged."
