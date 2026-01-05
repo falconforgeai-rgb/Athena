@@ -1,0 +1,30 @@
+{
+  "cap_id": "123e4567-e89b-12d3-a456-426614174000",
+  "timestamp": "2026-01-05T00:00:00Z",
+  "domain": "Governance",
+  "context_mode": "Advisor",
+  "advisor_of_record": "HUMAN",
+  "meta": {
+    "validators": {
+      "ethics": "compliant",
+      "empathy": "aligned",
+      "civic": "verified"
+    }
+  },
+  "outputs": {
+    "summary": "Test CAP record for schema validation.",
+    "evidence": [],
+    "limitations": [],
+    "recommendations": [],
+    "confidence": "High"
+  },
+  "cap_extensions": {},
+  "integrity": {
+    "signature_status": "validated",
+    "root_hash_reference": "SHA256:NULL",
+    "audit_source": "falconforge-athena-v3_5"
+  },
+  "cgn_chain": {
+    "hash_prev": ""
+  }
+}
