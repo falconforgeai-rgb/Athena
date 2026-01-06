@@ -25,6 +25,6 @@
     "audit_source": "falconforge-athena-v3_5"
   },
   "cgn_chain": {
-    "hash_prev": ""
+    "hash_prev": "SHA256:d92c6f8487b5a10b1d146c14bfd22164aff71a0d4f4ecb429c69ff33933de603"
   }
 }
