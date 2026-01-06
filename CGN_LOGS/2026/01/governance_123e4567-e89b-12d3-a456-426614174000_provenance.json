@@ -2,7 +2,7 @@
   "cap_id": "123e4567-e89b-12d3-a456-426614174000",
   "schema": "v3.5",
   "root_hash": "SHA256:d92c6f8487b5a10b1d146c14bfd22164aff71a0d4f4ecb429c69ff33933de603",
-  "commit": "7ccc839c33bd0ee9356173c9dafc00dfad9724a0",
+  "commit": "cc17f6eb5ad6135022e724e60f10010130867b4d",
   "signer": "Athena-Audit-Bot",
-  "timestamp": "2026-01-05T17:34:46Z"
+  "timestamp": "2026-01-06T13:46:42Z"
 }
