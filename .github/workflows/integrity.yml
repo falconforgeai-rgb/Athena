@@ -1,4 +1,4 @@
-name: FalconForge Integrity Check
+name: FalconForge Integrity & CAP Validation
 on:
   push:
     branches: [ main ]
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   verify-schema-integrity:
-    name: Verify Athena Canon & Manifest Integrity
+    name: Verify Athena Canon, Manifest & CAP Payloads
     runs-on: ubuntu-latest
 
     steps:
@@ -74,7 +74,17 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 🧭 Step 5: Optional Human-Gated Manifest Sync
+      # 🧪 Step 5: CAP Payload Validation (Zapier / Outbound API)
+      # ------------------------------------------------------------
+      - name: 🧪 Validate CAP Payloads Against Schema
+        run: |
+          echo "🔎 Running CAP payload schema validation..."
+          pip install jsonschema
+          python3 scripts/validate_cap_payloads.py schemas/ATHENA_CAP_SCHEMA_v3_5.json CAP_LOGS/
+          echo "✅ CAP payloads validated successfully."
+
+      # ------------------------------------------------------------
+      # 🧭 Step 6: Optional Human-Gated Manifest Sync
       # ------------------------------------------------------------
       - name: 🧭 Human-Gated Manifest Sync
         if: failure() && github.actor == 'YOUR_GITHUB_USERNAME'
@@ -89,7 +99,7 @@ jobs:
           echo "✅ Manifest synchronization completed and committed."
 
       # ------------------------------------------------------------
-      # 🧾 Step 6: Post-Validation Summary
+      # 🧾 Step 7: Post-Validation Summary
       # ------------------------------------------------------------
       - name: 🧾 Post-Validation Summary
         if: always()
