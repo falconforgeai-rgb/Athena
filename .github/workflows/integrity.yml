@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🧩 Checkout Repository
+      - name: 🧩 Checkout Athena Repository
         uses: actions/checkout@v4
 
       - name: 🐍 Setup Python
@@ -23,40 +23,64 @@ jobs:
         with:
           python-version: '3.11'
 
+      # ------------------------------------------------------------
+      # 🔄 Step 1: Sync latest canonical manifest from falconforge-codex
+      # ------------------------------------------------------------
+      - name: 🔄 Sync Canonical Manifest from Codex
+        run: |
+          echo "Fetching canonical manifest from falconforge-codex..."
+          curl -s -O https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/FalconForge_Integrity_Manifest_v3_5.json
+          echo "✅ Canonical manifest synced successfully."
+
+      # ------------------------------------------------------------
+      # 🔍 Step 2: Compute runtime schema hash
+      # ------------------------------------------------------------
       - name: 🔍 Compute Runtime Hash
         id: runtime-hash
         run: |
-          echo "🔍 Computing runtime hash..."
-          FILE="ATHENA_CAP_SCHEMA_v3_5.json"
+          FILE="schemas/ATHENA_CAP_SCHEMA_v3_5.json"
+          if [ ! -f "$FILE" ]; then
+            echo "❌ ERROR: $FILE not found."
+            exit 1
+          fi
           HASH=$(sha256sum "$FILE" | awk '{print $1}')
           echo "runtime_hash=$HASH" >> "$GITHUB_OUTPUT"
+          echo "Runtime Hash: $HASH"
 
+      # ------------------------------------------------------------
+      # 📜 Step 3: Extract canonical hash from synced manifest
+      # ------------------------------------------------------------
       - name: 📜 Extract Canonical Hash from Manifest
         id: manifest-hash
         run: |
           CANON=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' FalconForge_Integrity_Manifest_v3_5.json | sed 's/SHA256://')
           echo "manifest_hash=$CANON" >> "$GITHUB_OUTPUT"
+          echo "Manifest Hash: $CANON"
 
-      - name: ⚖️ Compare Hashes
+      # ------------------------------------------------------------
+      # ⚖️ Step 4: Compare hashes
+      # ------------------------------------------------------------
+      - name: ⚖️ Compare Integrity Hashes
         id: compare
         run: |
           echo "Manifest Hash : ${{ steps.manifest-hash.outputs.manifest_hash }}"
           echo "Runtime  Hash : ${{ steps.runtime-hash.outputs.runtime_hash }}"
           if [ "${{ steps.runtime-hash.outputs.runtime_hash }}" != "${{ steps.manifest-hash.outputs.manifest_hash }}" ]; then
             echo "❌ Integrity mismatch detected!"
-            echo "This likely means ATHENA_CAP_SCHEMA_v3_5.json was modified or re-serialized."
-            echo "Human review required (advisor-of-record)."
+            echo "A schema file has drifted from canonical baseline."
             exit 1
           else
             echo "✅ Integrity verified — canonical manifest alignment confirmed."
           fi
 
-      # Optional: Human-Gated Manifest Sync
+      # ------------------------------------------------------------
+      # 🧭 Step 5: Optional Human-Gated Manifest Sync
+      # ------------------------------------------------------------
       - name: 🧭 Human-Gated Manifest Sync
         if: failure() && github.actor == 'YOUR_GITHUB_USERNAME'
         run: |
           echo "⚙️ Rebuilding manifest to match updated CAP schema..."
-          python3 scripts/update_manifest_hash.py ATHENA_CAP_SCHEMA_v3_5.json FalconForge_Integrity_Manifest_v3_5.json
+          python3 scripts/update_manifest_hash.py schemas/ATHENA_CAP_SCHEMA_v3_5.json FalconForge_Integrity_Manifest_v3_5.json
           git config user.name "Athena Integrity Bot"
           git config user.email "integrity@falconforge.ai"
           git add FalconForge_Integrity_Manifest_v3_5.json
@@ -64,10 +88,13 @@ jobs:
           git push
           echo "✅ Manifest synchronization completed and committed."
 
+      # ------------------------------------------------------------
+      # 🧾 Step 6: Post-Validation Summary
+      # ------------------------------------------------------------
       - name: 🧾 Post-Validation Summary
         if: always()
         run: |
-          echo "📘 CAP Validation Complete."
-          echo "DTL coverage: 1.0"
+          echo "📘 CAP Validation Complete"
+          echo "Repository: Athena"
           echo "Advisor-of-Record: HUMAN"
-          echo "Evidence Engine Integrity: $( [ "${{ job.status }}" = 'success' ] && echo OK || echo REVIEW_NEEDED )"
+          echo "Evidence Engine Integrity: $( [ \"${{ job.status }}\" = 'success' ] && echo OK || echo REVIEW_NEEDED )"
