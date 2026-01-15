@@ -25,6 +25,13 @@ jobs:
         with:
           python-version: '3.11'
 
+     - name: 📥 Fetch Canonical Schema from FalconForge Codex
+        run: |
+          mkdir -p schemas
+          curl -s -o schemas/ATHENA_CAP_SCHEMA_v3_5.json \
+            https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/governance/canon_v3_5/FalconForge_Integrity_Manifest_v3_5.json
+          echo "✅ Canonical schema pulled from FalconForge Codex"
+
       - name: 🔄 Sync Canonical Manifest from FalconForge Codex
         run: |
           curl -s -O https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/FalconForge_Integrity_Manifest_v3_5.json
