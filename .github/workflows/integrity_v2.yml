@@ -30,18 +30,27 @@ jobs:
         run: |
           echo "🔍 Fetching canonical schema and manifest from FalconForge Codex..."
           mkdir -p "$GITHUB_WORKSPACE/schemas"
-          curl -L --fail -o "$GITHUB_WORKSPACE/schemas/ATHENA_CAP_SCHEMA_v3_5.json" \
+          cd "$GITHUB_WORKSPACE/schemas"
+          curl -L --fail -o ATHENA_CAP_SCHEMA_v3_5.json \
             "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json"
-          curl -L --fail -o "$GITHUB_WORKSPACE/schemas/FalconForge_Integrity_Manifest_v3_5.json" \
+          curl -L --fail -o FalconForge_Integrity_Manifest_v3_5.json \
             "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json"
           echo "✅ Canonical schema and manifest pulled from FalconForge Codex"
+          echo "Contents of schemas directory:"
           ls -l "$GITHUB_WORKSPACE/schemas"
 
       - name: 🧮 Verify Schema Hash Against Manifest
+        working-directory: ${{ github.workspace }}
         run: |
           echo "🔍 Verifying schema hash integrity..."
-          MANIFEST_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' "$GITHUB_WORKSPACE/schemas/FalconForge_Integrity_Manifest_v3_5.json" | sed 's/SHA256://')
-          RUNTIME_HASH=$(sha256sum "$GITHUB_WORKSPACE/schemas/ATHENA_CAP_SCHEMA_v3_5.json" | awk '{print $1}')
+          cd "$GITHUB_WORKSPACE/schemas"
+          if [ ! -f ATHENA_CAP_SCHEMA_v3_5.json ]; then
+            echo "❌ ERROR: Schema file missing after fetch."
+            ls -R "$GITHUB_WORKSPACE"
+            exit 1
+          fi
+          MANIFEST_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' FalconForge_Integrity_Manifest_v3_5.json | sed 's/SHA256://')
+          RUNTIME_HASH=$(sha256sum ATHENA_CAP_SCHEMA_v3_5.json | awk '{print $1}')
           echo "Manifest Hash : $MANIFEST_HASH"
           echo "Runtime  Hash : $RUNTIME_HASH"
           if [ "$MANIFEST_HASH" != "$RUNTIME_HASH" ]; then
@@ -49,6 +58,7 @@ jobs:
             exit 1
           fi
           echo "✅ Integrity verified — hashes match."
+
 
       - name: 🧪 Validate CAP Payloads
         run: |
