@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: "0 12 * * 0"   # Weekly on Sunday 12:00 UTC
+    - cron: "0 12 * * 0"   # Weekly on Sunday at 12:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -28,19 +28,20 @@ jobs:
 
       - name: 📥 Fetch Canonical Schema and Manifest from FalconForge Codex
         run: |
-          mkdir -p schemas
           echo "🔍 Fetching canonical schema and manifest from FalconForge Codex..."
-          curl -s -o schemas/ATHENA_CAP_SCHEMA_v3_5.json \
-            https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json
-          curl -s -o schemas/FalconForge_Integrity_Manifest_v3_5.json \
-            https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json
+          mkdir -p "$GITHUB_WORKSPACE/schemas"
+          curl -L --fail -o "$GITHUB_WORKSPACE/schemas/ATHENA_CAP_SCHEMA_v3_5.json" \
+            "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json"
+          curl -L --fail -o "$GITHUB_WORKSPACE/schemas/FalconForge_Integrity_Manifest_v3_5.json" \
+            "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json"
           echo "✅ Canonical schema and manifest pulled from FalconForge Codex"
+          ls -l "$GITHUB_WORKSPACE/schemas"
 
       - name: 🧮 Verify Schema Hash Against Manifest
         run: |
           echo "🔍 Verifying schema hash integrity..."
-          MANIFEST_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' schemas/FalconForge_Integrity_Manifest_v3_5.json | sed 's/SHA256://')
-          RUNTIME_HASH=$(sha256sum schemas/ATHENA_CAP_SCHEMA_v3_5.json | awk '{print $1}')
+          MANIFEST_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' "$GITHUB_WORKSPACE/schemas/FalconForge_Integrity_Manifest_v3_5.json" | sed 's/SHA256://')
+          RUNTIME_HASH=$(sha256sum "$GITHUB_WORKSPACE/schemas/ATHENA_CAP_SCHEMA_v3_5.json" | awk '{print $1}')
           echo "Manifest Hash : $MANIFEST_HASH"
           echo "Runtime  Hash : $RUNTIME_HASH"
           if [ "$MANIFEST_HASH" != "$RUNTIME_HASH" ]; then
@@ -56,7 +57,7 @@ jobs:
             echo "⚠️  No CAP payloads found in CAP_LOGS/. Skipping validation."
             exit 0
           fi
-          python3 scripts/validate_cap_payloads.py schemas/ATHENA_CAP_SCHEMA_v3_5.json CAP_LOGS/
+          python3 scripts/validate_cap_payloads.py "$GITHUB_WORKSPACE/schemas/ATHENA_CAP_SCHEMA_v3_5.json" CAP_LOGS/
 
       - name: 🔐 Check Validator Tri-Signatures
         run: |
@@ -77,35 +78,4 @@ jobs:
 
       - name: 📤 Export Decision Trace Ledger
         run: |
-          python3 scripts/export_dtl.py CAP_LOGS/ DTL_EXPORTS/
-
-      - name: 🗃️ Archive Old CAP Logs (90 days)
-        run: |
-          mkdir -p archive/CAP_LOGS
-          find CAP_LOGS -type f -mtime +90 -exec mv {} archive/CAP_LOGS/ \; || true
-          echo "✅ Logs older than 90 days archived."
-
-      - name: ☁️ Upload Archive to S3
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
-        run: |
-          pip install awscli
-          aws s3 sync archive/CAP_LOGS s3://falconforge-athena-archive/CAP_LOGS/ --delete
-          echo "✅ Archived CAP logs synced to S3."
-
-      - name: 🧾 Generate Weekly Civic Report
-        run: |
-          python3 scripts/generate_civic_report.py reports/
-          git config user.name "Athena Civic Bot"
-          git config user.email "integrity@falconforge.ai"
-          git add reports/
-          git commit -m "Add weekly civic compliance report" || echo "No new report to commit."
-          git push
-
-      - name: ✅ Final Summary
-        if: always()
-        run: |
-          echo "🏁 CAP Validation Complete"
-          echo "Slack alerts sent if required."
+          python3 scripts/export_dtl.py CAP_LOGS/ D
