@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+update_manifest_hash.py
+----------------------------------------
+Recalculates the SHA256 hash of a given schema file and updates the
+canonical FalconForge Integrity Manifest. Use only after human approval.
+"""
+
 import hashlib, json, sys, os
 
 if len(sys.argv) < 3:
@@ -7,15 +14,17 @@ if len(sys.argv) < 3:
 
 schema_file, manifest_file = sys.argv[1], sys.argv[2]
 
+# Compute new SHA256 hash for the schema
 with open(schema_file, "rb") as f:
     new_hash = hashlib.sha256(f.read()).hexdigest()
 
+# Load manifest and update the hash
 with open(manifest_file, "r+", encoding="utf-8") as f:
     data = json.load(f)
-    for mod in data["modules"]:
+    for mod in data.get("modules", []):
         if mod["name"] == os.path.basename(schema_file):
             mod["sha256"] = f"SHA256:{new_hash}"
-            mod["update"] = "auto-synced by human-gated integrity job"
+            mod["update"] = "auto-synced by human-gated job"
     f.seek(0)
     json.dump(data, f, indent=2)
     f.truncate()
