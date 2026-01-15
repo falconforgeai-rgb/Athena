@@ -31,16 +31,14 @@ jobs:
         env:
           CODEX_TOKEN: ${{ secrets.CODEX_TOKEN }}
         run: |
-          echo "📦 Fetching FalconForge Canonical Manifest..."
+          echo "📦 Fetching FalconForge Canonical Manifest (via curl)..."
           mkdir -p schemas
-          gh auth setup-git
-          gh auth status || gh auth login --with-token <<< "${CODEX_TOKEN}"
-          gh api \
-            repos/falconforgeai-rgb/falconforge-codex/contents/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json \
-            --header "Accept: application/vnd.github.v3.raw" > schemas/FalconForge_Integrity_Manifest_v3_5.json
-
-          echo "✅ Manifest fetched successfully."
-          head -n 10 schemas/FalconForge_Integrity_Manifest_v3_5.json || true
+          curl -sSL -H "Authorization: token ${CODEX_TOKEN}" \
+               -H "Accept: application/vnd.github.v3.raw" \
+               -o schemas/FalconForge_Integrity_Manifest_v3_5.json \
+               "https://api.github.com/repos/falconforgeai-rgb/falconforge-codex/contents/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json"
+          echo "✅ Manifest fetched:"
+          head -n 5 schemas/FalconForge_Integrity_Manifest_v3_5.json
 
       - name: 🧮 Verify Schema Hash Against Manifest
         run: |
