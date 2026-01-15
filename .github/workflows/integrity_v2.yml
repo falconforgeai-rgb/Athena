@@ -53,21 +53,41 @@ jobs:
       - name: 🧮 Verify Schema Hash Against Manifest
         run: |
           echo "🔍 Verifying schema hash integrity..."
+          pip install jq
+          
+          MANIFEST_PATH="schemas/FalconForge_Integrity_Manifest_v3_5.json"
+          SCHEMA_PATH="schemas/ATHENA_CAP_SCHEMA_v3_5.json"
+
+          if [ ! -f "$MANIFEST_PATH" ]; then
+            echo "❌ Manifest missing: $MANIFEST_PATH"
+            exit 1
+          fi
           if [ ! -f "$SCHEMA_PATH" ]; then
-            echo "❌ ERROR: Schema file missing at $SCHEMA_PATH"
+            echo "❌ Schema missing: $SCHEMA_PATH"
             exit 1
           fi
 
-          pip install jq
-          MANIFEST_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' "$MANIFEST_PATH" | sed 's/SHA256://')
-          RUNTIME_HASH=$(sha256sum "$SCHEMA_PATH" | awk '{print $1}')
+          MANIFEST_HASH=$(jq -r '
+            .modules[]? |
+            select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") |
+            (.sha256 // .hash // .checksum // empty)
+          ' "$MANIFEST_PATH" | sed 's/SHA256://')
+
+          RUNTIME_HASH=$(sha256sum "$SCHEMA_PATH" | awk "{print \$1}")
+
           echo "Manifest Hash : $MANIFEST_HASH"
           echo "Runtime  Hash : $RUNTIME_HASH"
+
+          if [ -z "$MANIFEST_HASH" ]; then
+            echo "⚠️ Manifest does not contain entry for ATHENA_CAP_SCHEMA_v3_5.json"
+            exit 1
+          fi
 
           if [ "$MANIFEST_HASH" != "$RUNTIME_HASH" ]; then
             echo "❌ Integrity mismatch!"
             exit 1
           fi
+
           echo "✅ Integrity verified — hashes match."
 
       - name: 🧪 Validate CAP Payloads
