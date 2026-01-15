@@ -16,6 +16,9 @@ jobs:
   civic-integrity-pipeline:
     name: Athena v3.5 Civic Integrity
     runs-on: ubuntu-latest
+    env:
+      SCHEMA_PATH: ${{ github.workspace }}/schemas/ATHENA_CAP_SCHEMA_v3_5.json
+      MANIFEST_PATH: ${{ github.workspace }}/schemas/FalconForge_Integrity_Manifest_v3_5.json
 
     steps:
       - name: 🧩 Checkout Repository
@@ -30,27 +33,24 @@ jobs:
         run: |
           echo "🔍 Fetching canonical schema and manifest from FalconForge Codex..."
           mkdir -p "$GITHUB_WORKSPACE/schemas"
-          cd "$GITHUB_WORKSPACE/schemas"
-          curl -L --fail -o ATHENA_CAP_SCHEMA_v3_5.json \
+          curl -L --fail -o "$SCHEMA_PATH" \
             "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json"
-          curl -L --fail -o FalconForge_Integrity_Manifest_v3_5.json \
+          curl -L --fail -o "$MANIFEST_PATH" \
             "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json"
           echo "✅ Canonical schema and manifest pulled from FalconForge Codex"
-          echo "Contents of schemas directory:"
+          echo "📂 Listing schemas directory:"
           ls -l "$GITHUB_WORKSPACE/schemas"
 
       - name: 🧮 Verify Schema Hash Against Manifest
-        working-directory: ${{ github.workspace }}
         run: |
           echo "🔍 Verifying schema hash integrity..."
-          cd "$GITHUB_WORKSPACE/schemas"
-          if [ ! -f ATHENA_CAP_SCHEMA_v3_5.json ]; then
-            echo "❌ ERROR: Schema file missing after fetch."
+          if [ ! -f "$SCHEMA_PATH" ]; then
+            echo "❌ ERROR: Schema file missing at $SCHEMA_PATH"
             ls -R "$GITHUB_WORKSPACE"
             exit 1
           fi
-          MANIFEST_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' FalconForge_Integrity_Manifest_v3_5.json | sed 's/SHA256://')
-          RUNTIME_HASH=$(sha256sum ATHENA_CAP_SCHEMA_v3_5.json | awk '{print $1}')
+          MANIFEST_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' "$MANIFEST_PATH" | sed 's/SHA256://')
+          RUNTIME_HASH=$(sha256sum "$SCHEMA_PATH" | awk '{print $1}')
           echo "Manifest Hash : $MANIFEST_HASH"
           echo "Runtime  Hash : $RUNTIME_HASH"
           if [ "$MANIFEST_HASH" != "$RUNTIME_HASH" ]; then
@@ -59,7 +59,6 @@ jobs:
           fi
           echo "✅ Integrity verified — hashes match."
 
-
       - name: 🧪 Validate CAP Payloads
         run: |
           pip install jsonschema
@@ -67,7 +66,7 @@ jobs:
             echo "⚠️  No CAP payloads found in CAP_LOGS/. Skipping validation."
             exit 0
           fi
-          python3 scripts/validate_cap_payloads.py "$GITHUB_WORKSPACE/schemas/ATHENA_CAP_SCHEMA_v3_5.json" CAP_LOGS/
+          python3 scripts/validate_cap_payloads.py "$SCHEMA_PATH" CAP_LOGS/
 
       - name: 🔐 Check Validator Tri-Signatures
         run: |
