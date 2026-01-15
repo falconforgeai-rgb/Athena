@@ -1,11 +1,12 @@
 name: FalconForge Athena v3.5 Civic Compliance
+
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: "0 12 * * 0" # Weekly on Sunday noon UTC
+    - cron: "0 12 * * 0"   # Weekly on Sunday 12:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -23,45 +24,38 @@ jobs:
       - name: 🐍 Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-     - name: 📥 Fetch Canonical Schema from FalconForge Codex
+      - name: 📥 Fetch Canonical Schema and Manifest from FalconForge Codex
         run: |
           mkdir -p schemas
+          echo "🔍 Fetching canonical schema and manifest from FalconForge Codex..."
           curl -s -o schemas/ATHENA_CAP_SCHEMA_v3_5.json \
-            https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/governance/canon_v3_5/FalconForge_Integrity_Manifest_v3_5.json
-          echo "✅ Canonical schema pulled from FalconForge Codex"
+            https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json
+          curl -s -o schemas/FalconForge_Integrity_Manifest_v3_5.json \
+            https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json
+          echo "✅ Canonical schema and manifest pulled from FalconForge Codex"
 
-      - name: 🔄 Sync Canonical Manifest from FalconForge Codex
+      - name: 🧮 Verify Schema Hash Against Manifest
         run: |
-          curl -s -O https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/FalconForge_Integrity_Manifest_v3_5.json
-          echo "✅ Canonical manifest synced."
-
-      - name: 🔍 Compute Runtime Schema Hash
-        id: runtime-hash
-        run: |
-          FILE="schemas/ATHENA_CAP_SCHEMA_v3_5.json"
-          HASH=$(sha256sum "$FILE" | awk '{print $1}')
-          echo "runtime_hash=$HASH" >> "$GITHUB_OUTPUT"
-
-      - name: 📜 Extract Canonical Hash
-        id: manifest-hash
-        run: |
-          CANON=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' FalconForge_Integrity_Manifest_v3_5.json | sed 's/SHA256://')
-          echo "manifest_hash=$CANON" >> "$GITHUB_OUTPUT"
-
-      - name: ⚖️ Verify Hash Integrity
-        run: |
-          if [ "${{ steps.runtime-hash.outputs.runtime_hash }}" != "${{ steps.manifest-hash.outputs.manifest_hash }}" ]; then
-            echo "❌ Integrity mismatch detected!"
+          echo "🔍 Verifying schema hash integrity..."
+          MANIFEST_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' schemas/FalconForge_Integrity_Manifest_v3_5.json | sed 's/SHA256://')
+          RUNTIME_HASH=$(sha256sum schemas/ATHENA_CAP_SCHEMA_v3_5.json | awk '{print $1}')
+          echo "Manifest Hash : $MANIFEST_HASH"
+          echo "Runtime  Hash : $RUNTIME_HASH"
+          if [ "$MANIFEST_HASH" != "$RUNTIME_HASH" ]; then
+            echo "❌ Integrity mismatch!"
             exit 1
-          else
-            echo "✅ Schema integrity verified."
           fi
+          echo "✅ Integrity verified — hashes match."
 
       - name: 🧪 Validate CAP Payloads
         run: |
           pip install jsonschema
+          if [ -z "$(ls -A CAP_LOGS 2>/dev/null)" ]; then
+            echo "⚠️  No CAP payloads found in CAP_LOGS/. Skipping validation."
+            exit 0
+          fi
           python3 scripts/validate_cap_payloads.py schemas/ATHENA_CAP_SCHEMA_v3_5.json CAP_LOGS/
 
       - name: 🔐 Check Validator Tri-Signatures
@@ -88,7 +82,7 @@ jobs:
       - name: 🗃️ Archive Old CAP Logs (90 days)
         run: |
           mkdir -p archive/CAP_LOGS
-          find CAP_LOGS -type f -mtime +90 -exec mv {} archive/CAP_LOGS/ \;
+          find CAP_LOGS -type f -mtime +90 -exec mv {} archive/CAP_LOGS/ \; || true
           echo "✅ Logs older than 90 days archived."
 
       - name: ☁️ Upload Archive to S3
@@ -107,11 +101,11 @@ jobs:
           git config user.name "Athena Civic Bot"
           git config user.email "integrity@falconforge.ai"
           git add reports/
-          git commit -m "Add weekly civic compliance report"
+          git commit -m "Add weekly civic compliance report" || echo "No new report to commit."
           git push
 
       - name: ✅ Final Summary
         if: always()
         run: |
-          echo "CAP Validation Complete"
+          echo "🏁 CAP Validation Complete"
           echo "Slack alerts sent if required."
