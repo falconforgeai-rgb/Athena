@@ -1,0 +1,110 @@
+name: FalconForge Athena v3.5 Civic Compliance
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: "0 12 * * 0" # Weekly on Sunday noon UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  civic-integrity-pipeline:
+    name: Athena v3.5 Civic Integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧩 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 🔄 Sync Canonical Manifest from FalconForge Codex
+        run: |
+          curl -s -O https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/FalconForge_Integrity_Manifest_v3_5.json
+          echo "✅ Canonical manifest synced."
+
+      - name: 🔍 Compute Runtime Schema Hash
+        id: runtime-hash
+        run: |
+          FILE="schemas/ATHENA_CAP_SCHEMA_v3_5.json"
+          HASH=$(sha256sum "$FILE" | awk '{print $1}')
+          echo "runtime_hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: 📜 Extract Canonical Hash
+        id: manifest-hash
+        run: |
+          CANON=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' FalconForge_Integrity_Manifest_v3_5.json | sed 's/SHA256://')
+          echo "manifest_hash=$CANON" >> "$GITHUB_OUTPUT"
+
+      - name: ⚖️ Verify Hash Integrity
+        run: |
+          if [ "${{ steps.runtime-hash.outputs.runtime_hash }}" != "${{ steps.manifest-hash.outputs.manifest_hash }}" ]; then
+            echo "❌ Integrity mismatch detected!"
+            exit 1
+          else
+            echo "✅ Schema integrity verified."
+          fi
+
+      - name: 🧪 Validate CAP Payloads
+        run: |
+          pip install jsonschema
+          python3 scripts/validate_cap_payloads.py schemas/ATHENA_CAP_SCHEMA_v3_5.json CAP_LOGS/
+
+      - name: 🔐 Check Validator Tri-Signatures
+        run: |
+          python3 scripts/notify_missing_signatures.py ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: 🩺 Check CAP Bridge Health
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://athena-cap-bridge.onrender.com/health)
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ CAP Bridge unreachable ($STATUS)"
+            exit 1
+          fi
+          echo "✅ CAP Bridge healthy."
+
+      - name: 🧠 Compute Civic Drift Metrics
+        run: |
+          python3 scripts/compute_civic_drift.py CAP_LOGS/
+
+      - name: 📤 Export Decision Trace Ledger
+        run: |
+          python3 scripts/export_dtl.py CAP_LOGS/ DTL_EXPORTS/
+
+      - name: 🗃️ Archive Old CAP Logs (90 days)
+        run: |
+          mkdir -p archive/CAP_LOGS
+          find CAP_LOGS -type f -mtime +90 -exec mv {} archive/CAP_LOGS/ \;
+          echo "✅ Logs older than 90 days archived."
+
+      - name: ☁️ Upload Archive to S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          pip install awscli
+          aws s3 sync archive/CAP_LOGS s3://falconforge-athena-archive/CAP_LOGS/ --delete
+          echo "✅ Archived CAP logs synced to S3."
+
+      - name: 🧾 Generate Weekly Civic Report
+        run: |
+          python3 scripts/generate_civic_report.py reports/
+          git config user.name "Athena Civic Bot"
+          git config user.email "integrity@falconforge.ai"
+          git add reports/
+          git commit -m "Add weekly civic compliance report"
+          git push
+
+      - name: ✅ Final Summary
+        if: always()
+        run: |
+          echo "CAP Validation Complete"
+          echo "Slack alerts sent if required."
