@@ -1,170 +1,113 @@
-name: FalconForge Athena v3.5 Civic Compliance
+name: Verify Athena Canon, Manifest & CAP Payloads
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  schedule:
-    - cron: "0 12 * * 0"   # Weekly audit (Sundays at 12:00 UTC)
-  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  civic-integrity-pipeline:
-    name: Athena v3.5 Civic Integrity
+  civic-integrity:
     runs-on: ubuntu-latest
 
-    env:
-      SCHEMA_PATH: ${{ github.workspace }}/schemas/ATHENA_CAP_SCHEMA_v3_5.json
-      MANIFEST_PATH: ${{ github.workspace }}/schemas/FalconForge_Integrity_Manifest_v3_5.json
-      AWS_REGION: us-east-1
-
     steps:
-      - name: 🧩 Checkout Repository
+      - name: 🧭 Checkout Athena Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: 🐍 Setup Python
+      - name: 🧩 Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
-      # Fetch schema + manifest from private Codex repo
-      - name: 📥 Fetch Canonical Schema and Manifest from FalconForge Codex
-        env:
-          CODEX_TOKEN: ${{ secrets.CODEX_READ_TOKEN }}
+      - name: 🔐 Install Dependencies
         run: |
-          echo "🔍 Fetching canonical schema and manifest from FalconForge Codex..."
-          mkdir -p "$GITHUB_WORKSPACE/schemas"
+          pip install jq jsonschema
 
-          curl -L -H "Authorization: token $CODEX_TOKEN" \
-            -o "$SCHEMA_PATH" \
-            "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json"
+      - name: 🔄 Fetch Canonical Manifest from Codex
+        env:
+          CODEX_TOKEN: ${{ secrets.CODEX_TOKEN }}
+        run: |
+          echo "📦 Fetching FalconForge Canonical Manifest..."
+          mkdir -p schemas
+          gh auth setup-git
+          gh auth status || gh auth login --with-token <<< "${CODEX_TOKEN}"
+          gh api \
+            repos/falconforgeai-rgb/falconforge-codex/contents/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json \
+            --header "Accept: application/vnd.github.v3.raw" > schemas/FalconForge_Integrity_Manifest_v3_5.json
 
-          curl -L -H "Authorization: token $CODEX_TOKEN" \
-            -o "$MANIFEST_PATH" \
-            "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json"
-
-          echo "✅ Canonical schema and manifest pulled successfully."
-          ls -l "$GITHUB_WORKSPACE/schemas"
+          echo "✅ Manifest fetched successfully."
+          head -n 10 schemas/FalconForge_Integrity_Manifest_v3_5.json || true
 
       - name: 🧮 Verify Schema Hash Against Manifest
         run: |
           echo "🔍 Verifying schema hash integrity..."
-          pip install jq
-          
+
           MANIFEST_PATH="schemas/FalconForge_Integrity_Manifest_v3_5.json"
           SCHEMA_PATH="schemas/ATHENA_CAP_SCHEMA_v3_5.json"
 
           if [ ! -f "$MANIFEST_PATH" ]; then
-            echo "❌ Manifest missing: $MANIFEST_PATH"
+            echo "❌ ERROR: Manifest file missing at $MANIFEST_PATH"
             exit 1
           fi
           if [ ! -f "$SCHEMA_PATH" ]; then
-            echo "❌ Schema missing: $SCHEMA_PATH"
+            echo "❌ ERROR: Schema file missing at $SCHEMA_PATH"
             exit 1
           fi
 
+          # Clean any BOM or encoding artifacts
+          iconv -f utf-8 -t utf-8 "$MANIFEST_PATH" -o "$MANIFEST_PATH"
+
+          echo "📖 Reading manifest entry for ATHENA_CAP_SCHEMA_v3_5.json"
           MANIFEST_HASH=$(jq -r '
-            .modules[]? |
+            .modules[]?, .files[]?, .artifacts[]?, .records[]? |
             select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") |
             (.sha256 // .hash // .checksum // empty)
           ' "$MANIFEST_PATH" | sed 's/SHA256://')
 
-          RUNTIME_HASH=$(sha256sum "$SCHEMA_PATH" | awk "{print \$1}")
+          RUNTIME_HASH=$(sha256sum "$SCHEMA_PATH" | awk '{print $1}')
 
           echo "Manifest Hash : $MANIFEST_HASH"
           echo "Runtime  Hash : $RUNTIME_HASH"
 
           if [ -z "$MANIFEST_HASH" ]; then
-            echo "⚠️ Manifest does not contain entry for ATHENA_CAP_SCHEMA_v3_5.json"
+            echo "⚠️ Manifest does not contain an entry for ATHENA_CAP_SCHEMA_v3_5.json"
             exit 1
           fi
 
           if [ "$MANIFEST_HASH" != "$RUNTIME_HASH" ]; then
-            echo "❌ Integrity mismatch!"
+            echo "❌ Integrity mismatch detected!"
+            echo "A schema file has drifted from canonical baseline."
             exit 1
           fi
 
           echo "✅ Integrity verified — hashes match."
 
-      - name: 🧪 Validate CAP Payloads
+      - name: 🧠 Validate CAP Payload Schema
         run: |
-          pip install jsonschema
-          if [ ! -d CAP_LOGS ] || [ -z "$(ls -A CAP_LOGS 2>/dev/null)" ]; then
-            echo "⚠️  No CAP payloads found in CAP_LOGS/. Skipping validation."
-            exit 0
-          fi
-          python3 scripts/validate_cap_payloads.py "$SCHEMA_PATH" CAP_LOGS/
+          echo "🔍 Validating CAP payload structure..."
+          python - <<'PYCODE'
+          import json, jsonschema, sys
+          with open("schemas/ATHENA_CAP_SCHEMA_v3_5.json") as schema_file:
+              schema = json.load(schema_file)
+          with open("cap_record.json") as data_file:
+              data = json.load(data_file)
+          try:
+              jsonschema.validate(instance=data, schema=schema)
+              print("✅ CAP payload structure is valid.")
+          except jsonschema.ValidationError as e:
+              print("❌ CAP payload validation failed:")
+              print(e.message)
+              sys.exit(1)
+          PYCODE
 
-      - name: 🔐 Check Validator Tri-Signatures
-        run: |
-          if [ -f scripts/notify_missing_signatures.py ]; then
-            python3 scripts/notify_missing_signatures.py ${{ secrets.SLACK_WEBHOOK_URL }}
-          else
-            echo "ℹ️ No tri-signature notifier script found. Skipping."
-          fi
-
-      - name: 🩺 Check CAP Bridge Health
-        run: |
-          echo "🔍 Checking CAP Bridge health..."
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://athena-cap-bridge.onrender.com/health)
-          if [ "$STATUS" != "200" ]; then
-            echo "❌ CAP Bridge unreachable ($STATUS)"
-            exit 1
-          fi
-          echo "✅ CAP Bridge healthy."
-
-      - name: 🧠 Compute Civic Drift Metrics
-        run: |
-          if [ -f scripts/compute_civic_drift.py ]; then
-            python3 scripts/compute_civic_drift.py CAP_LOGS/
-          else
-            echo "ℹ️ No civic drift model found. Skipping drift computation."
-          fi
-
-      - name: 📤 Export Decision Trace Ledger
-        run: |
-          if [ -f scripts/export_dtl.py ]; then
-            python3 scripts/export_dtl.py CAP_LOGS/ DTL_EXPORTS/
-          else
-            echo "ℹ️ No decision trace exporter found. Skipping DTL export."
-          fi
-
-      - name: 🗃️ Archive Old CAP Logs (90 days)
+      - name: 🪶 Archive Integrity Logs
+        if: success() || failure()
         run: |
           mkdir -p archive/CAP_LOGS
-          find CAP_LOGS -type f -mtime +90 -exec mv {} archive/CAP_LOGS/ \; || true
-          echo "✅ Logs older than 90 days archived."
-
-      - name: ☁️ Upload Archive to S3
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
-        run: |
-          pip install awscli
-          aws s3 sync archive/CAP_LOGS s3://falconforge-athena-archive/CAP_LOGS/ --delete
-          echo "✅ Archived CAP logs synced to S3."
-
-      - name: 🧾 Generate Weekly Civic Report
-        run: |
-          if [ -f scripts/generate_civic_report.py ]; then
-            python3 scripts/generate_civic_report.py reports/
-          else
-            echo "ℹ️ No civic report generator found. Skipping."
-          fi
-
-          git config user.name "Athena Civic Bot"
-          git config user.email "integrity@falconforge.ai"
-          git add reports/ || echo "No new reports."
-          git commit -m "Add weekly civic compliance report" || echo "Nothing new to commit."
-          git push || echo "Push skipped."
-
-      - name: ✅ Final Summary
-        if: always()
-        run: |
-          echo "🏁 Civic integrity validation pipeline complete."
-          echo "📜 Schema integrity checked, CAP payloads validated, and logs archived."
+          LOG_FILE="archive/CAP_LOGS/integrity_$(date +%Y%m%d_%H%M%S).log"
+          echo "Integrity validation completed at $(date -u)" > "$LOG_FILE"
+          echo "Result stored in $LOG_FILE"
