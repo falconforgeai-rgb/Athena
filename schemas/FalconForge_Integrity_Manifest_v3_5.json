@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "manifest_id": "FalconForge_Integrity_Manifest_v3_5",
   "version": "3.5",
@@ -216,3 +217,222 @@
   }
 }
 
+=======
+{
+  "manifest_id": "FalconForge_Integrity_Manifest_v3_5",
+  "version": "3.5",
+  "release_type": "Unified Canon Integrity Manifest",
+  "generated_at": "2025-12-21T17:02:23Z",
+  "author": "Athena (Steward)",
+  "derived_from": "FalconForge_Integrity_Manifest_v3_5.json",
+  "governance_policy": {
+    "mode": "Governed + Humanized + Civic",
+    "manifest_tier": "canonical",
+    "disclosure": "contextual",
+    "cap_exclusions": [
+      "rationale",
+      "validator_private_keys",
+      "redacted_governance_chains"
+    ],
+    "source_manifest": "ledger",
+    "humanization_compliance": true,
+    "civic_alignment": true,
+    "athena_role": "Evidence Engine",
+    "advisor_of_record": "HUMAN",
+    "human_fact_check_required": true,
+    "no_autonomous_actions": true
+  },
+
+  "modules_version_alignment": {
+    "canonical_expected_version": "3.5",
+    "legacy_versions_detected": [],
+    "status": "clean"
+  },
+
+  "modules": [
+    {
+      "name": "Athena_Library_Appendix_V1_1_Unified.txt",
+      "sha256": "SHA256:4942678c96156a5ec28c7298702fe8560b35bdbda8a4645f1f9b8316660786ef",
+      "bytes": 10931,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "Athena_Agent_Update_FileList_v3_5.json",
+      "sha256": "SHA256:d82d81dbc8ce3820785b07b01893786aeac3d7b55c8b319114dd39c6aa659a2d",
+      "bytes": 1446,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "Athena_Baseline_Canon_State_Report_v3_5.json",
+      "sha256": "SHA256:30bd738354532543b01a48f1920c2bf4349af27669ea257301e474a7a87e7eae",
+      "bytes": 1318,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "Athena_Brand_and_Comms_v3.5.md",
+      "sha256": "SHA256:394b10d3e858cfaa2eaf8140edad08662408f50f6e64afe5116b87789cf38aa5",
+      "bytes": 8354,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "athena_canon_unified_v_3_5.md",
+      "sha256": "SHA256:ef4add62810cf877ce51fc5cc3f3f387d9a72ae6691a12e82a5aaf1764181e14",
+      "bytes": 10340,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "Athena_Canonical_Integrity_Audit_v3_5.json",
+      "sha256": "SHA256:a874310735433fe59703bbab8c79e1bcd47f6b6892b5425d2ab3c7bf7f5e5b39",
+      "bytes": 6239,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "athena_cap_ledger_api_v3_5.yaml",
+      "sha256": "SHA256:29ce85faf66011dd44881815ffa2d2a3d4bac749d5080649dbcd21306e9945c0",
+      "bytes": 10703,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "ATHENA_CAP_SCHEMA_v3_5.json",
+      "sha256": "SHA256:9a374220e61a2ad4e515b7772a29ea8cb820e5a4e4dd3ac96796c5483a7941bb",
+      "bytes": 8006,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "athena_cap_validation.yml",
+      "sha256": "SHA256:f902fa5a210fab712a9c62ddeffbb5b7c60008b827b04d617989130c48e7ec36",
+      "bytes": 4131,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "ATHENA_CORE_v3_5.md",
+      "sha256": "SHA256:e1873212ac3a457f370067f9de6173cde430f51d3125dfd47fb72388d4ab3165",
+      "bytes": 7821,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "athena_decision_trace_spec_v3_5.json",
+      "sha256": "SHA256:0742ac7319b673ecc3ee0ebc8e3dd4f052a9a84941c92339fcd4fecc36b23f43",
+      "bytes": 6835,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "athena_evidence_pack_v3_5.yaml",
+      "sha256": "SHA256:4d67a6bcc623b9aedf4c5841540deb6be1e7b72308a14c13691917f9453d449a",
+      "bytes": 5511,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "ATHENA_EXPERIMENT_AND_RED_TEAM_v3_5.md",
+      "sha256": "SHA256:0eb907a509f05b7503f4ccadeea188cd38fd58f9f7299d183d421ff8bfb9d572",
+      "bytes": 8953,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "ATHENA_FORGE_v3_5_Unified.md",
+      "sha256": "SHA256:ddc8d350172460ebd2fcb469efcd07f6c3e11bf5d95c7ec7eefae7043373fe06",
+      "bytes": 9445,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "ATHENA_GOVERNANCE_v3_5.md",
+      "sha256": "SHA256:82cb79e59f18905527b49b6936c9175d7fdfdff8b07a9c58978ade897b1e117a",
+      "bytes": 8743,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "athena_library_appendix_cap_entry_v_1_1.json",
+      "sha256": "SHA256:a1652fca1be50480d5f8192fc2d9f0326a650f290b8a374606812b9d97b1bc10",
+      "bytes": 1391,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "athena_nist_compliance_module.py",
+      "sha256": "SHA256:74c9f5f754ebebae3e9fbf5a45f87940ebd225c58e8155048093341562e2ef55",
+      "bytes": 8409,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "Athena_Prompt_and_Domain_v3_5.md",
+      "sha256": "SHA256:faa7d5d17181c462ae10a35e1275d603cad378ae864af3ae9020d5e48adf5102",
+      "bytes": 7993,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "athena_risk_economics_models_v3_5.yaml",
+      "sha256": "SHA256:39cc855c97e072470280c70731752b12922cae96a0f6627cd868cc45c42179af",
+      "bytes": 5547,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "athena_risk_economics_readme_v3_5.md",
+      "sha256": "SHA256:e38b6e4537e2b4af8b3ffda0486af5f5306f3596b18c989501bddfdb47a9a13a",
+      "bytes": 3607,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "ATHENA_SALES_AND_LEADERSHIP_v3_5.md",
+      "sha256": "SHA256:198f8583def878e11f4e4e1f99abafba0ccf18ebcee2263de506aad7d7d7fffb",
+      "bytes": 8413,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "athena_validator_mesh_network_v3_5.yaml",
+      "sha256": "SHA256:8af6b70a3907f9cc3c454a8e1b375857545a22c408dc2592e6640cf9758077cd",
+      "bytes": 7183,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "FalconForge_Pitch_v3_5_Knowledge.md",
+      "sha256": "SHA256:34d240d07e557b0b5a201d39600b007816cfbcf8729ffd9a9b60104aec76cd22",
+      "bytes": 8292,
+      "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "ATHENA_CAP_SCHEMA_v3_5.json",
+      "sha256": "SHA256:4f37c66ef4ed95c41e0e70f55e2fdfbc438d7a9c2e8fccf630060aa3c492e54e",
+      "bytes": 8006,
+      "update": "v3.5 canonical schema alignment"
+    }
+
+  ],
+
+  "cap_extensions": {},
+
+  "change_log": [
+    { "update_id": "VER-FIX11", "summary": "Resolved manifest version mismatch; confirmed all modules at canonical v3.5." },
+    { "update_id": "CAP-HUM01", "summary": "Integrated Humanization Pass across all Canon modules." },
+    { "update_id": "CAP-HIC02", "summary": "Established Heroic Influence Cycle and leadership empathy calibration." },
+    { "update_id": "CAP-CHAC03", "summary": "Created Compassion + Humanization Audit Chain for full-system ethical verification." },
+    { "update_id": "CAP-HAA04", "summary": "Added Heroic Arc Alignment metric for ethical persuasion validation." },
+    { "update_id": "CAP-EDΔ05", "summary": "Introduced Empathy Drift Detection and Foresight Rehearsal System (FRS)." },
+    { "update_id": "VER-GOV06", "summary": "Implemented dual-validator ethics + empathy oversight and VRP synchronization." },
+    { "update_id": "CAP-TCL07", "summary": "Anchored all CAP records to Temporal Conscience Ledger for immutable lineage." },
+    { "update_id": "CAP-CIV08", "summary": "Added Civic Alignment Layer (CAL) with CRI/CEI civic empathy validation metrics." },
+    { "update_id": "VER-CGN09", "summary": "Integrated Conscience Governance Network (CGN) and civic validator node mesh." },
+    { "update_id": "CAP-VML10", "summary": "Established federated empathy and civic reasoning model synchronization." }
+  ],
+
+  "root_hash": "SHA256:d92c6f8487b5a10b1d146c14bfd22164aff71a0d4f4ecb429c69ff33933de603",
+  "validator_signatures": [
+    "VAR-001:RSA4096-SHA256:9D12A3B7D13F8E4B19F6A2A5E2BDF3A71C89A1B69D0C1CBB45EAB26F3C8A9A6F",
+    "EVA-004:RSA4096-SHA256:7C54E8F12E91B8D32B2E76A91CF1E5B85C6E212E21A6F7A4D7A8F2B93D12E6AB",
+    "GOV-009:RSA4096-SHA256:1F9B2E55A6C43A7B12E8F992E3B91D6E1C77FBE12DAD6A25E5D27D3F9DCEB77E",
+    "CRISP:RSA4096-SHA256:AF22B91E18C7C98F7766A59E5DF34C942A61F912AD72DF5AA8F821F1B6E4D82F",
+    "CVA-011:RSA4096-SHA256:AB91E1D3F8C27A5E334C92E77D11A1F7CB2D4C68F66A2E91C9E35D7F92C8EFA2"
+  ],
+
+  "integrity_level": 1.006,
+  "ethics_check": true,
+  "humanization_check": true,
+  "civic_alignment_check": true,
+  "status": "PASS",
+
+  "audit_validation": {
+    "athena_audit_version": "3.5",
+    "resolved_mismatch": true,
+    "last_verified": "2025-12-21T18:47:00Z",
+    "next_audit_due": "2026-01-21T00:00:00Z"
+  }
+}
+>>>>>>> b10672f (Fix JSON syntax: add missing comma and normalize LF line endings)
