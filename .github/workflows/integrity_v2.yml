@@ -62,23 +62,27 @@ jobs:
             exit 1
           fi
 
-          echo "🧹 Pre-validating manifest JSON structure..."
-          if ! python3 -m json.tool "$MANIFEST_PATH" > schemas/_validated_manifest.json 2>/dev/null; then
-            echo "⚠️ Manifest JSON malformed — attempting recovery via jq lenient parser..."
-            cat "$MANIFEST_PATH" | jq -R -s '.' > schemas/_validated_manifest.json || {
-              echo "❌ Could not parse manifest. Please check for trailing commas or encoding issues."
-              exit 1
-            }
-          fi
-          mv schemas/_validated_manifest.json "$MANIFEST_PATH"
+          echo "🧹 Pre-validating and sanitizing manifest JSON..."
+          python3 - <<'PYCODE'
+import sys, json, re, codecs
+path = "schemas/FalconForge_Integrity_Manifest_v3_5.json"
+text = open(path, 'rb').read().decode('utf-8', errors='ignore')
+text = text.strip().replace('\ufeff', '')                     # remove BOM
+text = re.sub(r',(\s*[\]}])', r'\1', text)                   # remove trailing commas
+try:
+    data = json.loads(text)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    print("✅ Manifest JSON validated and cleaned.")
+except Exception as e:
+    print(f"❌ Could not parse manifest JSON: {e}")
+    sys.exit(1)
+PYCODE
 
           echo "📖 Reading manifest entry for ATHENA_CAP_SCHEMA_v3_5.json"
           echo "🧾 Found manifest entries for schema:"
           jq -r '[.modules[]?, .files[]?, .artifacts[]?, .records[]?]
-            | map(select(.name=="ATHENA_CAP_SCHEMA_v3_5.json"))' "$MANIFEST_PATH" || {
-              echo "❌ jq failed to parse manifest."
-              exit 1
-            }
+            | map(select(.name=="ATHENA_CAP_SCHEMA_v3_5.json"))' "$MANIFEST_PATH"
 
           MANIFEST_HASH=$(jq -r '
             [
@@ -86,7 +90,7 @@ jobs:
               select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") |
               (.sha256 // .hash // .checksum // empty)
             ]
-            | map(sub("SHA256:";"") | gsub(" ";"")) 
+            | map(sub("SHA256:";"") | gsub(" ";""))
             | map(select(length > 0))
             | last // empty
           ' "$MANIFEST_PATH")
