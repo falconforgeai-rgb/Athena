@@ -28,21 +28,27 @@ jobs:
           pip install jq jsonschema
 
       - name: 🔄 Fetch Canonical Manifest from Codex
-        env:
-          CODEX_TOKEN: ${{ secrets.CODEX_TOKEN }}
         run: |
-          echo "📦 Fetching FalconForge Canonical Manifest (via curl)..."
+          echo "📦 Fetching FalconForge Canonical Manifest..."
           mkdir -p schemas
-          curl -sSL -H "Authorization: token ${CODEX_TOKEN}" \
-               -H "Accept: application/vnd.github.v3.raw" \
-               -o schemas/FalconForge_Integrity_Manifest_v3_5.json \
-               "https://api.github.com/repos/falconforgeai-rgb/falconforge-codex/contents/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json"
-          echo "✅ Manifest fetched:"
-          head -n 5 schemas/FalconForge_Integrity_Manifest_v3_5.json
+
+          # Primary fetch: direct raw canonical URL
+          if ! curl -fsSL \
+            -o schemas/FalconForge_Integrity_Manifest_v3_5.json \
+            "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json"; then
+            echo "⚠️ Primary fetch failed, retrying with GitHub API fallback..."
+            curl -fsSL \
+              -H "Accept: application/vnd.github.v3.raw" \
+              -o schemas/FalconForge_Integrity_Manifest_v3_5.json \
+              "https://api.github.com/repos/falconforgeai-rgb/falconforge-codex/contents/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json"
+          fi
+
+          echo "✅ Manifest fetched successfully."
+          head -n 5 schemas/FalconForge_Integrity_Manifest_v3_5.json || echo "⚠️ Manifest preview unavailable."
 
       - name: 🧮 Verify Schema Hash Against Manifest
         run: |
-          echo "🔍 Verifying schema hash integrity..."
+          echo -e "\033[1;36m🔍 Verifying schema hash integrity...\033[0m"
 
           MANIFEST_PATH="schemas/FalconForge_Integrity_Manifest_v3_5.json"
           SCHEMA_PATH="schemas/ATHENA_CAP_SCHEMA_v3_5.json"
@@ -56,56 +62,76 @@ jobs:
             exit 1
           fi
 
-          # Clean any BOM or encoding artifacts
+          # Normalize UTF-8 encoding
           iconv -f utf-8 -t utf-8 "$MANIFEST_PATH" -o "$MANIFEST_PATH"
 
-          echo "📖 Reading manifest entry for ATHENA_CAP_SCHEMA_v3_5.json"
+          # Extract manifest hash
           MANIFEST_HASH=$(jq -r '
-            .modules[]?, .files[]?, .artifacts[]?, .records[]? |
+            (.modules[]?, .files[]?, .artifacts[]?, .records[]?) |
             select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") |
             (.sha256 // .hash // .checksum // empty)
-          ' "$MANIFEST_PATH" | sed 's/SHA256://')
+          ' "$MANIFEST_PATH" 2>/dev/null | sed 's/SHA256://; s/ //g')
 
+          # Compute local hash
           RUNTIME_HASH=$(sha256sum "$SCHEMA_PATH" | awk '{print $1}')
 
           echo "Manifest Hash : $MANIFEST_HASH"
           echo "Runtime  Hash : $RUNTIME_HASH"
 
+          # Debug if jq failed to find entry
           if [ -z "$MANIFEST_HASH" ]; then
-            echo "⚠️ Manifest does not contain an entry for ATHENA_CAP_SCHEMA_v3_5.json"
+            echo "⚠️ Manifest entry not found for ATHENA_CAP_SCHEMA_v3_5.json"
+            echo "🧩 Debug: Searching manifest manually..."
+            grep -n ATHENA_CAP_SCHEMA_v3_5.json "$MANIFEST_PATH" || echo "No matches found in manifest."
             exit 1
           fi
 
+          # Compare hashes
           if [ "$MANIFEST_HASH" != "$RUNTIME_HASH" ]; then
-            echo "❌ Integrity mismatch detected!"
+            echo -e "\033[1;31m❌ Integrity mismatch detected!\033[0m"
             echo "A schema file has drifted from canonical baseline."
+            echo "🔎 Computing diff for inspection..."
+            diff -u <(head -n 20 "$SCHEMA_PATH") <(grep -A20 ATHENA_CAP_SCHEMA_v3_5.json "$MANIFEST_PATH" || true) || true
             exit 1
           fi
 
-          echo "✅ Integrity verified — hashes match."
+          echo -e "\033[1;32m✅ Integrity verified — hashes match.\033[0m"
 
       - name: 🧠 Validate CAP Payload Schema
         run: |
-          echo "🔍 Validating CAP payload structure..."
+          echo -e "\033[1;36m🔍 Validating CAP payload structure...\033[0m"
           python - <<'PYCODE'
           import json, jsonschema, sys
-          with open("schemas/ATHENA_CAP_SCHEMA_v3_5.json") as schema_file:
-              schema = json.load(schema_file)
-          with open("cap_record.json") as data_file:
-              data = json.load(data_file)
           try:
+              with open("schemas/ATHENA_CAP_SCHEMA_v3_5.json") as schema_file:
+                  schema = json.load(schema_file)
+              with open("cap_record.json") as data_file:
+                  data = json.load(data_file)
               jsonschema.validate(instance=data, schema=schema)
               print("✅ CAP payload structure is valid.")
+          except FileNotFoundError as e:
+              print(f"❌ Missing file: {e.filename}")
+              sys.exit(1)
           except jsonschema.ValidationError as e:
               print("❌ CAP payload validation failed:")
               print(e.message)
               sys.exit(1)
+          except json.decoder.JSONDecodeError as e:
+              print(f"❌ JSON parsing error in schema or payload: {e}")
+              sys.exit(1)
+          except Exception as e:
+              print(f"❌ Unexpected error: {e}")
+              sys.exit(1)
           PYCODE
 
       - name: 🪶 Archive Integrity Logs
-        if: success() || failure()
+        if: always()
         run: |
           mkdir -p archive/CAP_LOGS
           LOG_FILE="archive/CAP_LOGS/integrity_$(date +%Y%m%d_%H%M%S).log"
-          echo "Integrity validation completed at $(date -u)" > "$LOG_FILE"
-          echo "Result stored in $LOG_FILE"
+          {
+            echo "Integrity validation completed at $(date -u)"
+            echo "Manifest path: $MANIFEST_PATH"
+            echo "Schema path: $SCHEMA_PATH"
+          } > "$LOG_FILE"
+          echo "🪶 Result stored in $LOG_FILE"
