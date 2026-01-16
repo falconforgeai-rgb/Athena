@@ -1,1 +1,237 @@
-404: Not Found
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://falconforge.ai/schema/athena_cap_v3_5.json",
+  "title": "Athena Compassion + Humanization Audit Pass (CAP) Schema v3.5",
+  "canonical_version": "3.5",
+  "description": "Defines the canonical structure of a Compassion + Humanization Audit Pass (CAP) entry for Athena v3.5 — ensuring traceable, civic, and ethical reasoning compliance.",
+  "type": "object",
+  "additionalProperties": false,
+
+  "required": [
+    "cap_id",
+    "timestamp",
+    "domain",
+    "context_mode",
+    "advisor_of_record",
+    "outputs",
+    "cap_extensions",
+    "integrity"
+  ],
+
+  "properties": {
+    "cap_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F-]{36}$",
+      "description": "Unique UUIDv7 identifier for this Compassion Audit Pass."
+    },
+
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC ISO8601 timestamp marking CAP creation."
+    },
+
+    "domain": {
+      "type": "string",
+      "description": "Operational domain (e.g., Governance, Research, Sales, Education, Civic)."
+    },
+
+    "context_mode": {
+      "type": "string",
+      "enum": [
+        "Evidence Engine",
+        "Advisor",
+        "Mythic",
+        "Technical",
+        "Executive",
+        "Board",
+        "Regulator",
+        "Underwriter"
+      ],
+      "description": "Reasoning or voice mode used for the response."
+    },
+
+    "advisor_of_record": {
+      "type": "string",
+      "enum": ["HUMAN"],
+      "description": "Human advisor responsible for final validation and decision authority."
+    },
+
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "evidence", "limitations", "recommendations", "confidence"],
+      "properties": {
+        "summary": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "description": "Structured claims and their supporting evidence.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["claim", "support"],
+            "properties": {
+              "claim": { "type": "string" },
+              "support": { "type": "string" },
+              "source_type": {
+                "type": "string",
+                "enum": ["file", "web", "calculation", "reasoning"]
+              },
+              "source_ref": { "type": "string" }
+            }
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "recommendations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["Low", "Med", "High"]
+        }
+      }
+    },
+
+    "cap_extensions": {
+      "type": "object",
+      "description": "Extension payloads defining audit-level computational modules and bridge metadata.",
+      "additionalProperties": false,
+      "properties": {
+        "bridge_metadata": {
+          "type": "object",
+          "description": "Auto-generated CAP Bridge metadata (validated_at, validator_id, version, etc.).",
+          "additionalProperties": false,
+          "required": ["bridge_version", "validated_at", "validator_id", "validation_signature"],
+          "properties": {
+            "bridge_version": { "type": "string" },
+            "validated_at": { "type": "string", "format": "date-time" },
+            "validator_id": { "type": "string" },
+            "validation_signature": { "type": "string" },
+            "audit_context": { "type": "object" },
+            "integrity_meta": { "type": "object" }
+          }
+        },
+
+        "CAP_EXT13_DecisionTraceLedger": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "trace"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "trace": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["step", "inputs", "method", "output", "assumptions"],
+                "properties": {
+                  "step": { "type": "integer", "minimum": 1 },
+                  "inputs": { "type": "array", "items": { "type": "string" } },
+                  "method": { "type": "string" },
+                  "output": { "type": "string" },
+                  "assumptions": { "type": "array", "items": { "type": "string" } },
+                  "confidence": { "type": "string", "enum": ["Low", "Med", "High"] }
+                }
+              }
+            }
+          }
+        },
+
+        "CAP_EXT14_RiskEconomicsEngine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "models_used", "loss_estimates"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "models_used": { "type": "array", "items": { "type": "string" } },
+            "loss_estimates": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "ethical_risk": { "type": "number" },
+                "operational_risk": { "type": "number" },
+                "public_trust_risk": { "type": "number" }
+              }
+            }
+          }
+        },
+
+        "CAP_EXT15_HumanFailureModeAnalyzer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "signals_detected"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "signals_detected": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["signal", "severity", "description"],
+                "properties": {
+                  "signal": { "type": "string" },
+                  "severity": { "type": "string", "enum": ["low", "moderate", "high"] },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+
+        "CAP_EXT16_ContextGuard": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "trigger_count", "last_trigger_reason"],
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "trigger_count": { "type": "integer", "minimum": 0 },
+            "last_trigger_reason": { "type": "string" }
+          }
+        },
+
+        "CAP_EXT17_CivicSensitivityPass": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "detections", "annotations"],
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "detections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["topic", "contextualized", "timestamp"],
+                "properties": {
+                  "topic": { "type": "string" },
+                  "contextualized": { "type": "boolean" },
+                  "timestamp": { "type": "string", "format": "date-time" },
+                  "annotation": { "type": "string" }
+                }
+              }
+            },
+            "annotations": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signature_status", "root_hash_reference", "audit_source"],
+      "properties": {
+        "signature_status": {
+          "type": "string",
+          "enum": ["unsigned", "pending", "sealed", "validated"]
+        },
+        "root_hash_reference": { "type": "string" },
+        "audit_source": { "type": "string" }
+      }
+    }
+  }
+}
