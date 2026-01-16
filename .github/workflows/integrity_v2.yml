@@ -32,7 +32,7 @@ jobs:
           echo "📦 Fetching FalconForge Canonical Manifest..."
           mkdir -p schemas
 
-          # Primary fetch: direct raw canonical URL
+          # ✅ Use raw.githubusercontent.com for unencoded manifest content
           if ! curl -fsSL \
             -o schemas/FalconForge_Integrity_Manifest_v3_5.json \
             "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json"; then
@@ -62,15 +62,27 @@ jobs:
             exit 1
           fi
 
-          # Normalize UTF-8 encoding
+          # Normalize UTF-8 encoding to avoid BOM corruption
           iconv -f utf-8 -t utf-8 "$MANIFEST_PATH" -o "$MANIFEST_PATH"
 
-          # Extract manifest hash
+          echo "📖 Reading manifest entry for ATHENA_CAP_SCHEMA_v3_5.json"
+
+          # 🧩 Diagnostic echo – show all entries matching schema name
+          echo "🧾 Found manifest entries for schema:"
+          jq -r '[.modules[]?, .files[]?, .artifacts[]?, .records[]?] 
+            | map(select(.name=="ATHENA_CAP_SCHEMA_v3_5.json"))' "$MANIFEST_PATH"
+
+          # 🧩 Improved jq logic to handle multiple entries & empty fields
           MANIFEST_HASH=$(jq -r '
-            (.modules[]?, .files[]?, .artifacts[]?, .records[]?) |
-            select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") |
-            (.sha256 // .hash // .checksum // empty)
-          ' "$MANIFEST_PATH" 2>/dev/null | sed 's/SHA256://; s/ //g')
+            [
+              (.modules[]?, .files[]?, .artifacts[]?, .records[]?) |
+              select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") |
+              (.sha256 // .hash // .checksum // empty)
+            ]
+            | map(sub("SHA256:";"") | gsub(" ";"")) 
+            | map(select(length > 0))
+            | last // empty
+          ' "$MANIFEST_PATH")
 
           # Compute local hash
           RUNTIME_HASH=$(sha256sum "$SCHEMA_PATH" | awk '{print $1}')
@@ -78,20 +90,17 @@ jobs:
           echo "Manifest Hash : $MANIFEST_HASH"
           echo "Runtime  Hash : $RUNTIME_HASH"
 
-          # Debug if jq failed to find entry
           if [ -z "$MANIFEST_HASH" ]; then
-            echo "⚠️ Manifest entry not found for ATHENA_CAP_SCHEMA_v3_5.json"
-            echo "🧩 Debug: Searching manifest manually..."
-            grep -n ATHENA_CAP_SCHEMA_v3_5.json "$MANIFEST_PATH" || echo "No matches found in manifest."
+            echo "⚠️ Manifest entry not found or invalid for ATHENA_CAP_SCHEMA_v3_5.json"
             exit 1
           fi
 
-          # Compare hashes
           if [ "$MANIFEST_HASH" != "$RUNTIME_HASH" ]; then
             echo -e "\033[1;31m❌ Integrity mismatch detected!\033[0m"
             echo "A schema file has drifted from canonical baseline."
             echo "🔎 Computing diff for inspection..."
-            diff -u <(head -n 20 "$SCHEMA_PATH") <(grep -A20 ATHENA_CAP_SCHEMA_v3_5.json "$MANIFEST_PATH" || true) || true
+            diff -u <(head -n 20 "$SCHEMA_PATH") \
+                   <(grep -A20 ATHENA_CAP_SCHEMA_v3_5.json "$MANIFEST_PATH" || true) || true
             exit 1
           fi
 
