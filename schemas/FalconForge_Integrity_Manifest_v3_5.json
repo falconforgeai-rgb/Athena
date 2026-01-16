@@ -167,7 +167,14 @@
       "sha256": "SHA256:34d240d07e557b0b5a201d39600b007816cfbcf8729ffd9a9b60104aec76cd22",
       "bytes": 8292,
       "update": "v3.5 canonical bundle member"
+    },
+    {
+      "name": "ATHENA_CAP_SCHEMA_v3_5.json",
+      "sha256": "SHA256:4f37c66ef4ed95c41e0e70f55e2fdfbc438d7a9c2e8fccf630060aa3c492e54e",
+      "bytes": 8006,
+      "update": "v3.5 canonical schema alignment"
     }
+    
   ],
 
   "cap_extensions": {},
@@ -208,3 +215,4 @@
     "next_audit_due": "2026-01-21T00:00:00Z"
   }
 }
+
