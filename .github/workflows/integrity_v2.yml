@@ -62,17 +62,24 @@ jobs:
             exit 1
           fi
 
-          # Normalize UTF-8 encoding to avoid BOM corruption
-          iconv -f utf-8 -t utf-8 "$MANIFEST_PATH" -o "$MANIFEST_PATH"
+          echo "🧹 Pre-validating manifest JSON structure..."
+          if ! python3 -m json.tool "$MANIFEST_PATH" > schemas/_validated_manifest.json 2>/dev/null; then
+            echo "⚠️ Manifest JSON malformed — attempting recovery via jq lenient parser..."
+            cat "$MANIFEST_PATH" | jq -R -s '.' > schemas/_validated_manifest.json || {
+              echo "❌ Could not parse manifest. Please check for trailing commas or encoding issues."
+              exit 1
+            }
+          fi
+          mv schemas/_validated_manifest.json "$MANIFEST_PATH"
 
           echo "📖 Reading manifest entry for ATHENA_CAP_SCHEMA_v3_5.json"
-
-          # 🧩 Diagnostic echo – show all entries matching schema name
           echo "🧾 Found manifest entries for schema:"
-          jq -r '[.modules[]?, .files[]?, .artifacts[]?, .records[]?] 
-            | map(select(.name=="ATHENA_CAP_SCHEMA_v3_5.json"))' "$MANIFEST_PATH"
+          jq -r '[.modules[]?, .files[]?, .artifacts[]?, .records[]?]
+            | map(select(.name=="ATHENA_CAP_SCHEMA_v3_5.json"))' "$MANIFEST_PATH" || {
+              echo "❌ jq failed to parse manifest."
+              exit 1
+            }
 
-          # 🧩 Improved jq logic to handle multiple entries & empty fields
           MANIFEST_HASH=$(jq -r '
             [
               (.modules[]?, .files[]?, .artifacts[]?, .records[]?) |
@@ -84,7 +91,6 @@ jobs:
             | last // empty
           ' "$MANIFEST_PATH")
 
-          # Compute local hash
           RUNTIME_HASH=$(sha256sum "$SCHEMA_PATH" | awk '{print $1}')
 
           echo "Manifest Hash : $MANIFEST_HASH"
@@ -98,7 +104,6 @@ jobs:
           if [ "$MANIFEST_HASH" != "$RUNTIME_HASH" ]; then
             echo -e "\033[1;31m❌ Integrity mismatch detected!\033[0m"
             echo "A schema file has drifted from canonical baseline."
-            echo "🔎 Computing diff for inspection..."
             diff -u <(head -n 20 "$SCHEMA_PATH") \
                    <(grep -A20 ATHENA_CAP_SCHEMA_v3_5.json "$MANIFEST_PATH" || true) || true
             exit 1
