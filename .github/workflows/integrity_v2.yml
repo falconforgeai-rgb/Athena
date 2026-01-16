@@ -32,11 +32,11 @@ jobs:
           echo "📦 Fetching FalconForge Canonical Manifest..."
           mkdir -p schemas
 
-          # ✅ Use raw.githubusercontent.com for unencoded manifest content
+          # Use raw file endpoint for clean access
           if ! curl -fsSL \
             -o schemas/FalconForge_Integrity_Manifest_v3_5.json \
             "https://raw.githubusercontent.com/falconforgeai-rgb/falconforge-codex/main/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json"; then
-            echo "⚠️ Primary fetch failed, retrying with GitHub API fallback..."
+            echo "⚠️ Primary fetch failed — retrying via GitHub API..."
             curl -fsSL \
               -H "Accept: application/vnd.github.v3.raw" \
               -o schemas/FalconForge_Integrity_Manifest_v3_5.json \
@@ -64,12 +64,12 @@ jobs:
 
           echo "🧹 Pre-validating and sanitizing manifest JSON..."
           python3 - <<'PYCODE'
-import sys, json, re, codecs
+import sys, json, re
 path = "schemas/FalconForge_Integrity_Manifest_v3_5.json"
-text = open(path, 'rb').read().decode('utf-8', errors='ignore')
-text = text.strip().replace('\ufeff', '')                     # remove BOM
-text = re.sub(r',(\s*[\]}])', r'\1', text)                   # remove trailing commas
 try:
+    text = open(path, 'rb').read().decode('utf-8', errors='ignore')
+    text = text.strip().replace('\ufeff', '')
+    text = re.sub(r',(\s*[\]}])', r'\1', text)
     data = json.loads(text)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -108,8 +108,8 @@ PYCODE
           if [ "$MANIFEST_HASH" != "$RUNTIME_HASH" ]; then
             echo -e "\033[1;31m❌ Integrity mismatch detected!\033[0m"
             echo "A schema file has drifted from canonical baseline."
-            diff -u <(head -n 20 "$SCHEMA_PATH") \
-                   <(grep -A20 ATHENA_CAP_SCHEMA_v3_5.json "$MANIFEST_PATH" || true) || true
+            echo "🔎 Showing nearby manifest section for context..."
+            grep -A5 "ATHENA_CAP_SCHEMA_v3_5.json" "$MANIFEST_PATH" || true
             exit 1
           fi
 
@@ -119,28 +119,28 @@ PYCODE
         run: |
           echo -e "\033[1;36m🔍 Validating CAP payload structure...\033[0m"
           python - <<'PYCODE'
-          import json, jsonschema, sys
-          try:
-              with open("schemas/ATHENA_CAP_SCHEMA_v3_5.json") as schema_file:
-                  schema = json.load(schema_file)
-              with open("cap_record.json") as data_file:
-                  data = json.load(data_file)
-              jsonschema.validate(instance=data, schema=schema)
-              print("✅ CAP payload structure is valid.")
-          except FileNotFoundError as e:
-              print(f"❌ Missing file: {e.filename}")
-              sys.exit(1)
-          except jsonschema.ValidationError as e:
-              print("❌ CAP payload validation failed:")
-              print(e.message)
-              sys.exit(1)
-          except json.decoder.JSONDecodeError as e:
-              print(f"❌ JSON parsing error in schema or payload: {e}")
-              sys.exit(1)
-          except Exception as e:
-              print(f"❌ Unexpected error: {e}")
-              sys.exit(1)
-          PYCODE
+import json, jsonschema, sys
+try:
+    with open("schemas/ATHENA_CAP_SCHEMA_v3_5.json") as schema_file:
+        schema = json.load(schema_file)
+    with open("cap_record.json") as data_file:
+        data = json.load(data_file)
+    jsonschema.validate(instance=data, schema=schema)
+    print("✅ CAP payload structure is valid.")
+except FileNotFoundError as e:
+    print(f"❌ Missing file: {e.filename}")
+    sys.exit(1)
+except jsonschema.ValidationError as e:
+    print("❌ CAP payload validation failed:")
+    print(e.message)
+    sys.exit(1)
+except json.decoder.JSONDecodeError as e:
+    print(f"❌ JSON parsing error: {e}")
+    sys.exit(1)
+except Exception as e:
+    print(f"❌ Unexpected error: {e}")
+    sys.exit(1)
+PYCODE
 
       - name: 🪶 Archive Integrity Logs
         if: always()
@@ -149,7 +149,7 @@ PYCODE
           LOG_FILE="archive/CAP_LOGS/integrity_$(date +%Y%m%d_%H%M%S).log"
           {
             echo "Integrity validation completed at $(date -u)"
-            echo "Manifest path: $MANIFEST_PATH"
-            echo "Schema path: $SCHEMA_PATH"
+            echo "Manifest path: schemas/FalconForge_Integrity_Manifest_v3_5.json"
+            echo "Schema path: schemas/ATHENA_CAP_SCHEMA_v3_5.json"
           } > "$LOG_FILE"
           echo "🪶 Result stored in $LOG_FILE"
