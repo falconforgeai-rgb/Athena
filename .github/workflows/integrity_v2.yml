@@ -84,16 +84,16 @@ PYCODE
           jq -r '[.modules[]?, .files[]?, .artifacts[]?, .records[]?]
             | map(select(.name=="ATHENA_CAP_SCHEMA_v3_5.json"))' "$MANIFEST_PATH"
 
-          MANIFEST_HASH=$(jq -r '
-            [
-              (.modules[]?, .files[]?, .artifacts[]?, .records[]?) |
-              select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") |
-              (.sha256 // .hash // .checksum // empty)
-            ]
-            | map(sub("SHA256:";"") | gsub(" ";""))
-            | map(select(length > 0))
-            | last // empty
-          ' "$MANIFEST_PATH")
+         MANIFEST_HASH=$(jq -r '
+           [
+             (.modules[]?, .files[]?, .artifacts[]?, .records[]?) |
+             select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") |
+             {hash: (.sha256 // .hash // .checksum // empty), bytes: (.bytes // 0)}
+           ]
+           | sort_by(.bytes) | last | .hash
+           | sub("SHA256:";"") | gsub(" ";"")
+         ' "$MANIFEST_PATH")
+
 
           RUNTIME_HASH=$(sha256sum "$SCHEMA_PATH" | awk '{print $1}')
 
