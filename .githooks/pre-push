@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# 🧩 FalconForge Athena JSON Validator Hook
+# Prevents malformed JSON from being pushed to main
+
+echo "🔍 Running JSON validation on all tracked .json files..."
+FAILED=0
+
+# Find and validate every JSON file
+for file in $(git diff --cached --name-only --diff-filter=ACM | grep '\.json$'); do
+    if ! jq . "$file" >/dev/null 2>&1; then
+        echo "❌ Invalid JSON detected: $file"
+        FAILED=1
+    else
+        echo "✅ Valid JSON: $file"
+    fi
+done
+
+if [ "$FAILED" -ne 0 ]; then
+    echo "🚫 Push blocked — fix JSON syntax and retry."
+    exit 1
+fi
+
+echo "✨ All JSON files valid — push allowed."
+exit 0
+
