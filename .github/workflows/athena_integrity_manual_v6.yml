@@ -1,0 +1,108 @@
+name: Verify Athena Integrity (v6)
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Manual validation trigger reason'
+        required: false
+        default: 'Manual audit dispatch'
+  push:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y jq curl
+          python3 -m pip install --upgrade pip
+          pip install jsonschema colorama
+
+      - name: Create log directory
+        run: mkdir -p archive/CAP_LOGS
+
+      - name: Fetch canonical manifest
+        run: |
+          set -euo pipefail
+          if [ ! -f schemas/FalconForge_Integrity_Manifest_v3_5.json ]; then
+            echo "Fetching canonical manifest..."
+            curl -sSL https://raw.githubusercontent.com/falconforge-ai/falconforge-codex/main/falconforge-athena-v3_5/canonical/FalconForge_Integrity_Manifest_v3_5.json \
+              -o schemas/FalconForge_Integrity_Manifest_v3_5.json
+          fi
+
+      - name: Verify manifest and schema hash
+        id: verify
+        run: |
+          set -euo pipefail
+          LOGFILE="archive/CAP_LOGS/integrity_$(date +'%Y%m%d_%H%M%S').log"
+
+          echo "Manifest loaded: $(jq -r '.manifest_id' schemas/FalconForge_Integrity_Manifest_v3_5.json)" | tee -a "$LOGFILE"
+          EXPECTED_HASH=$(jq -r '.modules[] | select(.name=="ATHENA_CAP_SCHEMA_v3_5.json") | .sha256' schemas/FalconForge_Integrity_Manifest_v3_5.json | sed 's/SHA256://')
+          ACTUAL_HASH=$(sha256sum schemas/ATHENA_CAP_SCHEMA_v3_5.json | awk '{print $1}')
+
+          echo "Expected hash: $EXPECTED_HASH" | tee -a "$LOGFILE"
+          echo "Actual hash:   $ACTUAL_HASH" | tee -a "$LOGFILE"
+
+          if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+            echo "❌ Integrity mismatch detected!" | tee -a "$LOGFILE"
+            echo "Re-fetching canonical schema..."
+            curl -sSL https://raw.githubusercontent.com/falconforge-ai/falconforge-codex/main/falconforge-athena-v3_5/canonical/ATHENA_CAP_SCHEMA_v3_5.json \
+              -o schemas/ATHENA_CAP_SCHEMA_v3_5.json
+            NEW_HASH=$(sha256sum schemas/ATHENA_CAP_SCHEMA_v3_5.json | awk '{print $1}')
+            if [ "$EXPECTED_HASH" != "$NEW_HASH" ]; then
+              echo "❌ Self-healing failed. Schema remains mismatched." | tee -a "$LOGFILE"
+              exit 1
+            else
+              echo "✅ Self-healing successful — schema replaced." | tee -a "$LOGFILE"
+            fi
+          else
+            echo "✅ Integrity verified — hashes match." | tee -a "$LOGFILE"
+          fi
+
+      - name: Validate CAP payload structure
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE'
+          import json, sys
+          from jsonschema import validate, ValidationError
+          from datetime import datetime
+          from pathlib import Path
+
+          log_path = Path("archive/CAP_LOGS") / f"integrity_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log"
+
+          try:
+              with open("schemas/ATHENA_CAP_SCHEMA_v3_5.json", "r", encoding="utf-8") as f:
+                  schema = json.load(f)
+              with open("cap_record.json", "r", encoding="utf-8") as f:
+                  cap = json.load(f)
+              validate(instance=cap, schema=schema)
+              verdict = "✅ CAP payload structure valid."
+          except FileNotFoundError as e:
+              verdict = f"❌ Missing file: {e.filename}"
+              sys.exit(1)
+          except ValidationError as e:
+              verdict = f"❌ CAP validation failed: {e.message}"
+              sys.exit(1)
+          finally:
+              with open(log_path, "a", encoding="utf-8") as lf:
+                  lf.write(verdict + "\n")
+              print(verdict)
+          PYCODE
+
+      - name: Archive management
+        run: |
+          find archive/CAP_LOGS -type f -printf '%T@ %p\n' | sort -nr | tail -n +11 | awk '{print $2}' | xargs -r rm -f
+          echo "🪶 Log archival complete."
