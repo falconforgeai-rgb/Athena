@@ -1,4 +1,5 @@
 name: Verify Athena Canon, Manifest & CAP Payloads
+# Re-register workflow_dispatch trigger for manual run
 
 on:
   workflow_dispatch:
