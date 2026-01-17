@@ -1,10 +1,16 @@
-name: Verify Athena Canon, Manifest & CAP Payloads (v3 & Manifest Integrity (Manual Dispatch)
-# Re-register workflow_dispatch trigger for manual run
+name: Verify Athena Canon & Manifest Integrity (Manual Dispatch)
 
+# Force GitHub to register workflow_dispatch trigger properly
 on:
   workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual integrity verification'
+        required: false
+        default: 'Manual re-registration trigger'
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 permissions:
   contents: read
